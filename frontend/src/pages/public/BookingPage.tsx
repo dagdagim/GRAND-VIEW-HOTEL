@@ -129,7 +129,8 @@ export const BookingPage: React.FC = () => {
         guest: guestInfo,
         paymentMethod,
         specialRequests: guestInfo.specialRequests,
-        arrivalTime: guestInfo.arrivalTime
+        arrivalTime: guestInfo.arrivalTime,
+        clientUrl: window.location.origin
       };
 
       const res = await api.post('/public/booking', payload);

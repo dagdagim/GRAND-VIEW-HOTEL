@@ -250,8 +250,27 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
     let txRef: string | undefined;
 
     if (paymentMethod === 'CHAPA') {
-      const clientUrl = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel.onrender.com' : 'http://localhost:5173');
-      const serverUrl = process.env.SERVER_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel-backend.onrender.com' : `http://localhost:${process.env.PORT || 5000}`);
+      const incomingOrigin = req.body.clientUrl || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+      let clientUrl: string;
+      if (incomingOrigin && !incomingOrigin.includes('localhost')) {
+        clientUrl = incomingOrigin;
+      } else if (process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost')) {
+        clientUrl = process.env.CLIENT_URL;
+      } else if (process.env.NODE_ENV === 'production') {
+        clientUrl = 'https://grand-view-hotel.onrender.com';
+      } else {
+        clientUrl = incomingOrigin || process.env.CLIENT_URL || 'http://localhost:5173';
+      }
+
+      let serverUrl = process.env.SERVER_URL;
+      if (!serverUrl || serverUrl.includes('localhost')) {
+        if (process.env.NODE_ENV === 'production') {
+          serverUrl = 'https://grand-view-hotel-backend.onrender.com';
+        } else {
+          serverUrl = serverUrl || `http://localhost:${process.env.PORT || 5000}`;
+        }
+      }
+
       txRef = `tx-gvh-${bookingNumber.toLowerCase()}-${Date.now()}`;
 
       const payment = await PaymentService.initializePayment({
