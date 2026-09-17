@@ -44,15 +44,26 @@ export class EmailService {
       return await smtpTransport.sendMail(mailOptions);
     }
 
-    // 2. Gmail SMTP with automatic Port 587 (STARTTLS) & Port 465 (SSL) fallback + IPv4 enforcement
+    // 2. Gmail SMTP with guaranteed IPv4 resolution & Port 587/465 fallback
     if (gmailUser && gmailPass) {
+      let targetHost = 'smtp.gmail.com';
+      try {
+        const ipv4List = await dns.promises.resolve4('smtp.gmail.com');
+        if (ipv4List && ipv4List.length > 0) {
+          targetHost = ipv4List[0];
+          console.log(`[EMAIL DISPATCH] Resolved smtp.gmail.com to IPv4: ${targetHost}`);
+        }
+      } catch (dnsErr: any) {
+        console.warn(`[EMAIL DISPATCH] dns.resolve4 failed: ${dnsErr.message}, defaulting to hostname`);
+      }
+
       let firstError: any = null;
 
-      // Primary attempt: Port 587 (STARTTLS) with IPv4 forced
+      // Primary attempt: Port 587 (STARTTLS) with IPv4 IP
       try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 (IPv4) to ${mailOptions.to}...`);
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 to ${targetHost} for ${mailOptions.to}...`);
         const t587 = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
+          host: targetHost,
           port: 587,
           secure: false, // STARTTLS
           requireTLS: true,
@@ -60,11 +71,11 @@ export class EmailService {
             user: gmailUser,
             pass: gmailPass
           },
-          family: 4, // CRITICAL: Forces IPv4 to prevent hanging on cloud containers without IPv6
           connectionTimeout: 8000,
           greetingTimeout: 8000,
           socketTimeout: 12000,
           tls: {
+            servername: 'smtp.gmail.com',
             rejectUnauthorized: false
           }
         } as any);
@@ -76,22 +87,22 @@ export class EmailService {
         console.warn(`[EMAIL DISPATCH] Port 587 failed: ${err.message}. Retrying via Port 465 (SSL)...`);
       }
 
-      // Secondary attempt: Port 465 (SSL) with IPv4 forced
+      // Secondary attempt: Port 465 (SSL) with IPv4 IP
       try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 (IPv4) to ${mailOptions.to}...`);
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 to ${targetHost} for ${mailOptions.to}...`);
         const t465 = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
+          host: targetHost,
           port: 465,
           secure: true,
           auth: {
             user: gmailUser,
             pass: gmailPass
           },
-          family: 4, // CRITICAL: Forces IPv4
           connectionTimeout: 8000,
           greetingTimeout: 8000,
           socketTimeout: 12000,
           tls: {
+            servername: 'smtp.gmail.com',
             rejectUnauthorized: false
           }
         } as any);
