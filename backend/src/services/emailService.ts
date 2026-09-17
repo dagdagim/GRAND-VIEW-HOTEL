@@ -155,7 +155,7 @@ export class EmailService {
       ? new Date(checkOutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
       : 'Your Departure Date';
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const clientUrl = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel.onrender.com' : 'http://localhost:5173');
     const portalUrl = `${clientUrl}/room/${roomNumber}`;
 
     const htmlBody = `
@@ -244,7 +244,7 @@ export class EmailService {
 
     try {
       const transporter = await this.getTransporter();
-      const fromEmail = process.env.GMAIL_USER || process.env.SMTP_USER || 'concierge@grandviewhotel.com';
+      const fromEmail = process.env.GMAIL_USER || 'developerswork444@gmail.com';
       const mailOptions = {
         from: `"Grand View Hotel & Suites" <${fromEmail}>`,
         to: toEmail,

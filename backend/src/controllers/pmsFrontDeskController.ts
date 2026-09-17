@@ -259,21 +259,41 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
 
     // Send in-room access passcode to guest email if available
     let emailSentTo: string | null = null;
-    const guestEmail = (reservation.guest as any)?.email;
+    let guestEmail = (reservation.guest as any)?.email;
+    let guestName = (reservation.guest as any)?.fullName || `${(reservation.guest as any)?.firstName || ''} ${(reservation.guest as any)?.lastName || ''}`.trim();
+
+    if (!guestEmail && reservation.guest) {
+      const gDoc: any = await Guest.findById((reservation.guest as any)._id || reservation.guest);
+      if (gDoc) {
+        guestEmail = gDoc.email;
+        if (!guestName) {
+          guestName = gDoc.fullName || `${gDoc.firstName || ''} ${gDoc.lastName || ''}`.trim();
+        }
+      }
+    }
+
     if (guestEmail) {
       emailSentTo = guestEmail;
       const settings = await HotelSettings.findOne();
-      EmailService.sendInRoomPasscodeEmail({
-        toEmail: guestEmail,
-        guestName: (reservation.guest as any)?.fullName || (reservation.guest as any)?.name || 'Valued Guest',
-        roomNumber: room.roomNumber,
-        roomType: (reservation.roomType as any)?.name || 'Suite',
-        passcode: guestAccessCode,
-        checkOutDate: reservation.checkOutDate,
-        wifiSsid: (settings as any)?.wifiSsid,
-        wifiPassword: (settings as any)?.wifiPassword,
-        hotelPhone: (settings as any)?.phone
-      }).catch(err => console.error('Background email dispatch failed:', err));
+      
+      setImmediate(async () => {
+        try {
+          await EmailService.sendInRoomPasscodeEmail({
+            toEmail: guestEmail,
+            guestName: guestName || 'Valued Guest',
+            roomNumber: room.roomNumber,
+            roomType: (reservation.roomType as any)?.name || 'Suite',
+            passcode: guestAccessCode,
+            checkOutDate: reservation.checkOutDate,
+            wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
+            wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
+            hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
+          });
+          console.log(`[CHECK-IN PASSCODE EMAIL] Successfully delivered to ${guestEmail} for Room ${room.roomNumber}`);
+        } catch (err) {
+          console.error('[CHECK-IN PASSCODE EMAIL ERROR] Failed to dispatch email:', err);
+        }
+      });
     }
 
     res.json({
