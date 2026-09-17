@@ -81,6 +81,26 @@ export class EmailService {
       }
     }
 
+    if (process.env.EMAIL_HTTP_WEBHOOK_URL) {
+      try {
+        console.log(`[EMAIL DISPATCH] Dispatching via HTTPS Webhook to ${mailOptions.to}...`);
+        const hookRes = await fetch(process.env.EMAIL_HTTP_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            html: mailOptions.html
+          })
+        });
+        const hookData: any = await hookRes.json().catch(() => ({}));
+        console.log(`[EMAIL DISPATCH] Delivered via HTTPS Webhook.`, hookData);
+        return { messageId: 'webhook-' + Date.now() };
+      } catch (hookErr: any) {
+        console.warn(`[EMAIL DISPATCH] HTTPS Webhook failed: ${hookErr.message}`);
+      }
+    }
+
     // 1. If explicit generic SMTP host is configured
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
       const smtpTransport = nodemailer.createTransport({
