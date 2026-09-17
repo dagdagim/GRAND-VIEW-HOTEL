@@ -29,7 +29,15 @@ app.use(morgan('dev'));
 // Mount API routes
 app.use('/api', apiRoutes);
 
-// Health check
+// Root route & Health check
+app.get('/', (req: Request, res: Response) => {
+  res.json({
+    status: 'OK',
+    service: 'Grand View Hotel PMS & Booking Engine API',
+    timestamp: new Date()
+  });
+});
+
 app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'OK',
