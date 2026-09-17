@@ -23,41 +23,81 @@ export class EmailService {
    * Internal helper to dispatch mail with IPv4 forced and port 587 / 465 dual fallback
    */
   public static async sendMailWithFallback(mailOptions: any): Promise<any> {
-    const gmailUser = process.env.GMAIL_USER || 'developerswork444@gmail.com';
+    const gmailUser = (process.env.GMAIL_USER || 'developerswork444@gmail.com').trim();
     const gmailPass = (process.env.GMAIL_PASS || 'rdgizmzxfdbgxalh').replace(/\s+/g, '');
 
-    // 0. HTTP Email APIs (Crucial for platforms like Render Free tier that block outbound SMTP ports 25, 465, 587)
-    if (process.env.RESEND_API_KEY) {
+    // 1. Primary: Direct Gmail SMTP with guaranteed IPv4 resolution (port 587 & 465)
+    if (gmailUser && gmailPass) {
+      let targetHost = 'smtp.gmail.com';
       try {
-        console.log(`[EMAIL DISPATCH] Dispatching via Resend HTTPS API to ${mailOptions.to}...`);
-        const resendRes = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM || 'Grand View Hotel <onboarding@resend.dev>',
-            to: [mailOptions.to],
-            subject: mailOptions.subject,
-            html: mailOptions.html
-          })
-        });
-        const resData: any = await resendRes.json();
-        if (!resendRes.ok) {
-          throw new Error(resData?.message || `Resend HTTP error ${resendRes.status}`);
+        const ipv4List = await dns.promises.resolve4('smtp.gmail.com');
+        if (ipv4List && ipv4List.length > 0) {
+          targetHost = ipv4List[0];
+          console.log(`[EMAIL DISPATCH] Resolved smtp.gmail.com to IPv4: ${targetHost}`);
         }
-        console.log(`[EMAIL DISPATCH] Delivered via Resend HTTPS API. ID: ${resData?.id}`);
-        return { messageId: resData?.id };
-      } catch (resendErr: any) {
-        console.warn(`[EMAIL DISPATCH] Resend HTTPS API failed: ${resendErr.message}`);
+      } catch (dnsErr: any) {
+        console.warn(`[EMAIL DISPATCH] dns.resolve4 failed: ${dnsErr.message}, defaulting to hostname`);
+      }
+
+      // Try Port 587 (STARTTLS) with explicit IPv4
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 (${targetHost}) for ${mailOptions.to}...`);
+        const t587 = nodemailer.createTransport({
+          host: targetHost,
+          port: 587,
+          secure: false, // STARTTLS
+          requireTLS: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass
+          },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 12000,
+          tls: {
+            servername: 'smtp.gmail.com',
+            rejectUnauthorized: false
+          }
+        } as any);
+        const info = await t587.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 587. MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err587: any) {
+        console.warn(`[EMAIL DISPATCH] Gmail Port 587 attempt failed: ${err587.message}. Retrying via Port 465...`);
+      }
+
+      // Try Port 465 (SSL) with explicit IPv4
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 (${targetHost}) for ${mailOptions.to}...`);
+        const t465 = nodemailer.createTransport({
+          host: targetHost,
+          port: 465,
+          secure: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass
+          },
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 12000,
+          tls: {
+            servername: 'smtp.gmail.com',
+            rejectUnauthorized: false
+          }
+        } as any);
+        const info = await t465.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 465. MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err465: any) {
+        console.warn(`[EMAIL DISPATCH] Gmail Port 465 failed: ${err465.message}. Falling back to HTTPS APIs...`);
       }
     }
 
+    // 2. Fallback: Brevo HTTPS API (Sends over HTTPS Port 443 with sender developerswork444@gmail.com)
     if (process.env.BREVO_API_KEY) {
       try {
         console.log(`[EMAIL DISPATCH] Dispatching via Brevo HTTPS API to ${mailOptions.to}...`);
-        const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || 'developerswork444@gmail.com';
+        const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || gmailUser || 'developerswork444@gmail.com';
         const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
@@ -82,92 +122,31 @@ export class EmailService {
       }
     }
 
-    // 1. If explicit generic SMTP host is configured
-    if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-      const smtpTransport = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS?.replace(/\s+/g, '')
-        },
-        family: 4,
-        connectionTimeout: 8000,
-        greetingTimeout: 8000,
-        socketTimeout: 12000
-      } as any);
-      return await smtpTransport.sendMail(mailOptions);
-    }
-
-    // 2. Gmail SMTP with guaranteed IPv4 resolution & Port 587/465 fallback
-    if (gmailUser && gmailPass) {
-      let targetHost = 'smtp.gmail.com';
+    // 3. Fallback: Resend HTTPS API (Sends over HTTPS Port 443)
+    if (process.env.RESEND_API_KEY) {
       try {
-        const ipv4List = await dns.promises.resolve4('smtp.gmail.com');
-        if (ipv4List && ipv4List.length > 0) {
-          targetHost = ipv4List[0];
-          console.log(`[EMAIL DISPATCH] Resolved smtp.gmail.com to IPv4: ${targetHost}`);
+        console.log(`[EMAIL DISPATCH] Dispatching via Resend HTTPS API to ${mailOptions.to}...`);
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM || 'Grand View Hotel <onboarding@resend.dev>',
+            to: [mailOptions.to],
+            subject: mailOptions.subject,
+            html: mailOptions.html
+          })
+        });
+        const resData: any = await resendRes.json();
+        if (!resendRes.ok) {
+          throw new Error(resData?.message || `Resend HTTP error ${resendRes.status}`);
         }
-      } catch (dnsErr: any) {
-        console.warn(`[EMAIL DISPATCH] dns.resolve4 failed: ${dnsErr.message}, defaulting to hostname`);
-      }
-
-      let firstError: any = null;
-
-      // Primary attempt: Port 587 (STARTTLS) with IPv4 IP
-      try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 to ${targetHost} for ${mailOptions.to}...`);
-        const t587 = nodemailer.createTransport({
-          host: targetHost,
-          port: 587,
-          secure: false, // STARTTLS
-          requireTLS: true,
-          auth: {
-            user: gmailUser,
-            pass: gmailPass
-          },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 12000,
-          tls: {
-            servername: 'smtp.gmail.com',
-            rejectUnauthorized: false
-          }
-        } as any);
-        const info = await t587.sendMail(mailOptions);
-        console.log(`[EMAIL DISPATCH] Delivery succeeded via Port 587. MessageId: ${info?.messageId}`);
-        return info;
-      } catch (err: any) {
-        firstError = err;
-        console.warn(`[EMAIL DISPATCH] Port 587 failed: ${err.message}. Retrying via Port 465 (SSL)...`);
-      }
-
-      // Secondary attempt: Port 465 (SSL) with IPv4 IP
-      try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 to ${targetHost} for ${mailOptions.to}...`);
-        const t465 = nodemailer.createTransport({
-          host: targetHost,
-          port: 465,
-          secure: true,
-          auth: {
-            user: gmailUser,
-            pass: gmailPass
-          },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 12000,
-          tls: {
-            servername: 'smtp.gmail.com',
-            rejectUnauthorized: false
-          }
-        } as any);
-        const info = await t465.sendMail(mailOptions);
-        console.log(`[EMAIL DISPATCH] Delivery succeeded via Port 465. MessageId: ${info?.messageId}`);
-        return info;
-      } catch (err465: any) {
-        console.error(`[EMAIL DISPATCH] Port 465 also failed: ${err465.message}`);
-        throw new Error(`Gmail delivery failed (Port 587: ${firstError?.message || 'timeout'}, Port 465: ${err465.message})`);
+        console.log(`[EMAIL DISPATCH] Delivered via Resend HTTPS API. ID: ${resData?.id}`);
+        return { messageId: resData?.id };
+      } catch (resendErr: any) {
+        console.warn(`[EMAIL DISPATCH] Resend HTTPS API failed: ${resendErr.message}`);
       }
     }
 
