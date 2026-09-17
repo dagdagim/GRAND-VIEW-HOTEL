@@ -1,3 +1,8 @@
+import dns from 'node:dns';
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 import nodemailer from 'nodemailer';
 import { AuditLog } from '../models/index.js';
 
@@ -14,32 +19,16 @@ export interface InRoomPasscodeEmailParams {
 }
 
 export class EmailService {
-  private static transporter: any = null;
-
-  private static async getTransporter(): Promise<any> {
-    if (this.transporter) return this.transporter;
-
-    // 1. Gmail App Password support
+  /**
+   * Internal helper to dispatch mail with IPv4 forced and port 587 / 465 dual fallback
+   */
+  public static async sendMailWithFallback(mailOptions: any): Promise<any> {
     const gmailUser = process.env.GMAIL_USER || 'developerswork444@gmail.com';
     const gmailPass = (process.env.GMAIL_PASS || 'rdgizmzxfdbgxalh').replace(/\s+/g, '');
-    if (gmailUser && gmailPass) {
-      console.log(`[EMAIL SERVICE] Initializing Gmail transport for ${gmailUser}`);
-      this.transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmailUser,
-          pass: gmailPass
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000
-      });
-      return this.transporter;
-    }
 
-    // 2. Generic SMTP support
+    // 1. If explicit generic SMTP host is configured
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
-      this.transporter = nodemailer.createTransport({
+      const smtpTransport = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587'),
         secure: process.env.SMTP_SECURE === 'true',
@@ -47,17 +36,78 @@ export class EmailService {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS?.replace(/\s+/g, '')
         },
-        connectionTimeout: 4000,
-        greetingTimeout: 4000,
-        socketTimeout: 6000
-      });
-      return this.transporter;
+        family: 4,
+        connectionTimeout: 8000,
+        greetingTimeout: 8000,
+        socketTimeout: 12000
+      } as any);
+      return await smtpTransport.sendMail(mailOptions);
     }
 
-    // 3. Fallback: Ethereal development test account
+    // 2. Gmail SMTP with automatic Port 587 (STARTTLS) & Port 465 (SSL) fallback + IPv4 enforcement
+    if (gmailUser && gmailPass) {
+      let firstError: any = null;
+
+      // Primary attempt: Port 587 (STARTTLS) with IPv4 forced
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 (IPv4) to ${mailOptions.to}...`);
+        const t587 = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false, // STARTTLS
+          requireTLS: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass
+          },
+          family: 4, // CRITICAL: Forces IPv4 to prevent hanging on cloud containers without IPv6
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 12000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        } as any);
+        const info = await t587.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Port 587. MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err: any) {
+        firstError = err;
+        console.warn(`[EMAIL DISPATCH] Port 587 failed: ${err.message}. Retrying via Port 465 (SSL)...`);
+      }
+
+      // Secondary attempt: Port 465 (SSL) with IPv4 forced
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 (IPv4) to ${mailOptions.to}...`);
+        const t465 = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass
+          },
+          family: 4, // CRITICAL: Forces IPv4
+          connectionTimeout: 8000,
+          greetingTimeout: 8000,
+          socketTimeout: 12000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        } as any);
+        const info = await t465.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Port 465. MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err465: any) {
+        console.error(`[EMAIL DISPATCH] Port 465 also failed: ${err465.message}`);
+        throw new Error(`Gmail delivery failed (Port 587: ${firstError?.message || 'timeout'}, Port 465: ${err465.message})`);
+      }
+    }
+
+    // 3. Fallback: Ethereal test account if no credentials
     try {
       const testAccount = await nodemailer.createTestAccount();
-      this.transporter = nodemailer.createTransport({
+      const ethTransport = nodemailer.createTransport({
         host: testAccount.smtp.host,
         port: testAccount.smtp.port,
         secure: testAccount.smtp.secure,
@@ -66,13 +116,11 @@ export class EmailService {
           pass: testAccount.pass
         }
       });
+      return await ethTransport.sendMail(mailOptions);
     } catch {
-      this.transporter = nodemailer.createTransport({
-        jsonTransport: true
-      });
+      const jsonTransport = nodemailer.createTransport({ jsonTransport: true });
+      return await jsonTransport.sendMail(mailOptions);
     }
-
-    return this.transporter;
   }
 
   /**
@@ -90,7 +138,6 @@ export class EmailService {
         return { success: false, message: 'No email found for guest' };
       }
 
-      const transporter = await this.getTransporter();
       const fromEmail = process.env.GMAIL_USER || 'developerswork444@gmail.com';
       const guestName = guest?.fullName || guest?.name || `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim() || 'Valued Guest';
       const roomName = roomType?.name || reservation?.roomType?.name || 'Grand View Suite';
@@ -120,7 +167,7 @@ export class EmailService {
         `
       };
 
-      await transporter.sendMail(mailOptions);
+      await this.sendMailWithFallback(mailOptions);
       console.log(`[EMAIL DISPATCH] Booking confirmation successfully delivered to ${toEmail} for #${reservation.bookingNumber}`);
       return { success: true, message: 'Booking confirmation sent' };
     } catch (err: any) {
@@ -243,7 +290,6 @@ export class EmailService {
     `;
 
     try {
-      const transporter = await this.getTransporter();
       const fromEmail = process.env.GMAIL_USER || 'developerswork444@gmail.com';
       const mailOptions = {
         from: `"Grand View Hotel & Suites" <${fromEmail}>`,
@@ -252,7 +298,7 @@ export class EmailService {
         html: htmlBody
       };
 
-      const info = await transporter.sendMail(mailOptions);
+      const info = await this.sendMailWithFallback(mailOptions);
       const previewUrl = nodemailer.getTestMessageUrl(info);
       const isSandbox = !Boolean(
         (process.env.GMAIL_USER && process.env.GMAIL_PASS) ||

@@ -272,28 +272,40 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
       }
     }
 
+    if (!guestEmail && stay.guest) {
+      const gDoc: any = await Guest.findById((stay.guest as any)._id || stay.guest);
+      if (gDoc) {
+        guestEmail = gDoc.email;
+        if (!guestName) {
+          guestName = gDoc.fullName || `${gDoc.firstName || ''} ${gDoc.lastName || ''}`.trim();
+        }
+      }
+    }
+
     if (guestEmail) {
       emailSentTo = guestEmail;
       const settings = await HotelSettings.findOne();
       
-      setImmediate(async () => {
-        try {
-          await EmailService.sendInRoomPasscodeEmail({
-            toEmail: guestEmail,
-            guestName: guestName || 'Valued Guest',
-            roomNumber: room.roomNumber,
-            roomType: (reservation.roomType as any)?.name || 'Suite',
-            passcode: guestAccessCode,
-            checkOutDate: reservation.checkOutDate,
-            wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
-            wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
-            hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
-          });
+      try {
+        const emailResult = await EmailService.sendInRoomPasscodeEmail({
+          toEmail: guestEmail,
+          guestName: guestName || 'Valued Guest',
+          roomNumber: room.roomNumber,
+          roomType: (reservation.roomType as any)?.name || 'Suite',
+          passcode: guestAccessCode,
+          checkOutDate: reservation.checkOutDate,
+          wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
+          wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
+          hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
+        });
+        if (emailResult.success) {
           console.log(`[CHECK-IN PASSCODE EMAIL] Successfully delivered to ${guestEmail} for Room ${room.roomNumber}`);
-        } catch (err) {
-          console.error('[CHECK-IN PASSCODE EMAIL ERROR] Failed to dispatch email:', err);
+        } else {
+          console.error(`[CHECK-IN PASSCODE EMAIL ERROR] Failed to deliver: ${emailResult.message}`);
         }
-      });
+      } catch (err: any) {
+        console.error('[CHECK-IN PASSCODE EMAIL ERROR] Failed to dispatch email:', err);
+      }
     }
 
     res.json({
@@ -749,7 +761,19 @@ export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Resp
       await stay.save();
     }
 
-    const recipientEmail = customEmail || (stay.guest as any)?.email;
+    let recipientEmail = customEmail || (stay.guest as any)?.email;
+    let guestName = (stay.guest as any)?.fullName || (stay.guest as any)?.name;
+
+    if (!recipientEmail && stay.guest) {
+      const gDoc: any = await Guest.findById((stay.guest as any)._id || stay.guest);
+      if (gDoc) {
+        recipientEmail = gDoc.email;
+        if (!guestName) {
+          guestName = gDoc.fullName || `${gDoc.firstName || ''} ${gDoc.lastName || ''}`.trim();
+        }
+      }
+    }
+
     if (!recipientEmail) {
       res.status(400).json({ error: 'No email address associated with this guest. Please provide an email address.' });
       return;
@@ -758,19 +782,30 @@ export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Resp
     const settings = await HotelSettings.findOne();
     const emailResult = await EmailService.sendInRoomPasscodeEmail({
       toEmail: recipientEmail,
-      guestName: (stay.guest as any)?.fullName || (stay.guest as any)?.name || 'Valued Guest',
+      guestName: guestName || 'Valued Guest',
       roomNumber: room.roomNumber,
       roomType: (stay.roomType as any)?.name || 'Suite',
       passcode: stay.guestAccessCode,
       checkOutDate: stay.scheduledCheckOut,
-      wifiSsid: (settings as any)?.wifiSsid,
-      wifiPassword: (settings as any)?.wifiPassword,
-      hotelPhone: (settings as any)?.phone
+      wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
+      wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
+      hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
     });
+
+    if (!emailResult.success) {
+      res.status(500).json({
+        status: 'error',
+        error: emailResult.message || 'Failed to dispatch email',
+        message: emailResult.message || 'Failed to dispatch email',
+        email: recipientEmail,
+        passcode: stay.guestAccessCode
+      });
+      return;
+    }
 
     res.json({
       status: 'success',
-      message: emailResult.message || `Passcode [${stay.guestAccessCode}] successfully emailed to ${recipientEmail}!`,
+      message: `Passcode [${stay.guestAccessCode}] successfully emailed to ${recipientEmail}!`,
       email: recipientEmail,
       passcode: stay.guestAccessCode,
       previewUrl: emailResult.previewUrl,
