@@ -792,20 +792,12 @@ export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Resp
       hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
     });
 
-    if (!emailResult.success) {
-      res.status(500).json({
-        status: 'error',
-        error: emailResult.message || 'Failed to dispatch email',
-        message: emailResult.message || 'Failed to dispatch email',
-        email: recipientEmail,
-        passcode: stay.guestAccessCode
-      });
-      return;
-    }
-
     res.json({
-      status: 'success',
-      message: `Passcode [${stay.guestAccessCode}] successfully emailed to ${recipientEmail}!`,
+      status: emailResult.success ? 'success' : 'warning',
+      emailDelivered: emailResult.success,
+      message: emailResult.success
+        ? `Passcode [${stay.guestAccessCode}] successfully emailed to ${recipientEmail}!`
+        : `In-room passcode is [${stay.guestAccessCode}]. (Cloud email notice: Render free tier blocks outbound SMTP ports 25/465/587. Configure RESEND_API_KEY in Render to enable cloud emails).`,
       email: recipientEmail,
       passcode: stay.guestAccessCode,
       previewUrl: emailResult.previewUrl,
