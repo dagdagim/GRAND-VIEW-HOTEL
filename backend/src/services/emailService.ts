@@ -20,21 +20,19 @@ export class EmailService {
     if (this.transporter) return this.transporter;
 
     // 1. Gmail App Password support
-    const gmailUser = process.env.GMAIL_USER;
-    const gmailPass = process.env.GMAIL_PASS?.replace(/\s+/g, '');
+    const gmailUser = process.env.GMAIL_USER || 'developerswork444@gmail.com';
+    const gmailPass = (process.env.GMAIL_PASS || 'rdgizmzxfdbgxalh').replace(/\s+/g, '');
     if (gmailUser && gmailPass) {
       console.log(`[EMAIL SERVICE] Initializing Gmail transport for ${gmailUser}`);
       this.transporter = nodemailer.createTransport({
-        host: 'smtp.gmail.com',
-        port: 465,
-        secure: true,
+        service: 'gmail',
         auth: {
           user: gmailUser,
           pass: gmailPass
         },
-        connectionTimeout: 4000,
-        greetingTimeout: 4000,
-        socketTimeout: 6000
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000
       });
       return this.transporter;
     }
@@ -86,30 +84,44 @@ export class EmailService {
     roomType: any
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const toEmail = guest?.email;
-      if (!toEmail) return { success: false, message: 'No email found for guest' };
+      let toEmail = guest?.email || reservation?.guest?.email;
+      if (!toEmail) {
+        console.warn(`[EMAIL WARNING] No recipient email found for reservation #${reservation?.bookingNumber}`);
+        return { success: false, message: 'No email found for guest' };
+      }
 
       const transporter = await this.getTransporter();
-      const fromEmail = process.env.GMAIL_USER || process.env.SMTP_USER || 'reservations@grandviewhotel.com';
+      const fromEmail = process.env.GMAIL_USER || 'developerswork444@gmail.com';
+      const guestName = guest?.fullName || guest?.name || `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim() || 'Valued Guest';
+      const roomName = roomType?.name || reservation?.roomType?.name || 'Grand View Suite';
+
       const mailOptions = {
         from: `"Grand View Hotel & Suites" <${fromEmail}>`,
         to: toEmail,
         subject: `Booking Confirmed #${reservation.bookingNumber} — Grand View Hotel & Suites`,
         html: `
-          <div style="font-family: Arial, sans-serif; background: #0f172a; color: #fff; padding: 24px; border-radius: 16px;">
-            <h2 style="color: #c29b38; margin-top: 0;">Reservation Confirmation</h2>
-            <p>Dear <strong>${guest.fullName || guest.name}</strong>,</p>
-            <p>Thank you for choosing Grand View Hotel & Suites. Your reservation <strong>#${reservation.bookingNumber}</strong> for <strong>${roomType?.name || 'Suite'}</strong> is confirmed.</p>
-            <p><strong>Check-In:</strong> ${new Date(reservation.checkInDate).toLocaleDateString()}<br>
-            <strong>Check-Out:</strong> ${new Date(reservation.checkOutDate).toLocaleDateString()}<br>
-            <strong>Total Amount:</strong> ETB ${reservation.pricing?.total?.toLocaleString()}</p>
-            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">Upon arrival and front desk check-in approval, you will receive an in-room digital access code to access 24/7 room service dining and concierge from your phone.</p>
+          <div style="font-family: Arial, sans-serif; background: #0f172a; color: #fff; padding: 24px; border-radius: 16px; max-width: 600px; margin: 0 auto; border: 1px solid #c29b38;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <span style="color: #c29b38; font-size: 11px; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">Grand View Hotel & Suites</span>
+              <h2 style="color: #ffffff; margin: 6px 0 0 0; font-size: 22px;">Reservation Confirmed</h2>
+            </div>
+            <p>Dear <strong>${guestName}</strong>,</p>
+            <p>Thank you for choosing Grand View Hotel & Suites. Your reservation <strong>#${reservation.bookingNumber}</strong> for <strong>${roomName}</strong> is confirmed and fully paid.</p>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; margin: 20px 0; border: 1px solid rgba(255,255,255,0.1);">
+              <p style="margin: 4px 0;"><strong>Check-In:</strong> ${new Date(reservation.checkInDate).toLocaleDateString()}</p>
+              <p style="margin: 4px 0;"><strong>Check-Out:</strong> ${new Date(reservation.checkOutDate).toLocaleDateString()}</p>
+              <p style="margin: 4px 0;"><strong>Total Paid:</strong> ETB ${reservation.pricing?.total?.toLocaleString()}</p>
+            </div>
+            <p style="color: #94a3b8; font-size: 13px; line-height: 1.5;">Upon arrival and front desk check-in approval, you will receive an in-room digital access code to access 24/7 room service dining, housekeeping requests, and concierge directly from your smartphone.</p>
+            <div style="text-align: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: #64748b;">
+              Grand View Hotel & Suites • Cameroon Street, Bole Diplomatic Corridor, Addis Ababa
+            </div>
           </div>
         `
       };
 
       await transporter.sendMail(mailOptions);
-      console.log(`[EMAIL DISPATCH] Booking confirmation sent to ${toEmail} for #${reservation.bookingNumber}`);
+      console.log(`[EMAIL DISPATCH] Booking confirmation successfully delivered to ${toEmail} for #${reservation.bookingNumber}`);
       return { success: true, message: 'Booking confirmation sent' };
     } catch (err: any) {
       console.error('[EMAIL ERROR] Failed to send booking confirmation:', err);

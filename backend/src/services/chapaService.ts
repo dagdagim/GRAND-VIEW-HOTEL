@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Payment, Reservation, Folio, Notification, AuditLog } from '../models/index.js';
+import { Payment, Reservation, Folio, Notification, AuditLog, RoomType } from '../models/index.js';
 import { FolioService } from './folioService.js';
 import { EmailService } from './emailService.js';
 
@@ -230,12 +230,24 @@ export class ChapaService {
       await reservation.save();
 
       // Send confirmation email asynchronously without blocking HTTP response
-      if (reservation.guest && reservation.roomType) {
-        setImmediate(() => {
-          EmailService.sendBookingConfirmation(reservation, reservation.guest, reservation.roomType)
-            .catch(mailErr => console.warn('Failed to send Chapa booking confirmation email:', mailErr));
-        });
-      }
+      const targetGuest = reservation.guest?.email ? reservation.guest : (
+        chapaData?.email ? {
+          email: chapaData.email,
+          fullName: `${chapaData.first_name || ''} ${chapaData.last_name || ''}`.trim() || reservation.guest?.fullName || 'Guest'
+        } : reservation.guest
+      );
+
+      setImmediate(async () => {
+        try {
+          let targetRoomType = reservation.roomType;
+          if (!targetRoomType?.name) {
+            targetRoomType = await RoomType.findById(reservation.roomType);
+          }
+          await EmailService.sendBookingConfirmation(reservation, targetGuest, targetRoomType);
+        } catch (mailErr) {
+          console.error('[EMAIL ERROR] Failed to send Chapa booking confirmation email:', mailErr);
+        }
+      });
 
       // Generate PMS Notification
       await Notification.create({
