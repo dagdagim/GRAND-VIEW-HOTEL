@@ -310,12 +310,16 @@ export class EmailService {
         console.log(`[EMAIL PREVIEW URL] ${previewUrl}`);
       }
 
-      await AuditLog.create({
-        userName: 'System Emailer',
-        action: 'SEND_IN_ROOM_PASSCODE_EMAIL',
-        resource: 'Guest',
-        details: `Dispatched in-room verification passcode [${passcode}] to ${toEmail} for Room ${roomNumber}`
-      });
+      try {
+        await AuditLog.create({
+          userName: 'System Emailer',
+          action: 'SEND_IN_ROOM_PASSCODE_EMAIL',
+          resource: 'Guest',
+          details: `Dispatched in-room verification passcode [${passcode}] to ${toEmail} for Room ${roomNumber}`
+        });
+      } catch (logErr: any) {
+        console.warn('[EMAIL AUDIT LOG ERROR] Failed to record audit log:', logErr?.message);
+      }
 
       return {
         success: true,
