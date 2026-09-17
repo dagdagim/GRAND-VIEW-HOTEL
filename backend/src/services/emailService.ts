@@ -57,6 +57,7 @@ export class EmailService {
     if (process.env.BREVO_API_KEY) {
       try {
         console.log(`[EMAIL DISPATCH] Dispatching via Brevo HTTPS API to ${mailOptions.to}...`);
+        const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || process.env.GMAIL_USER || 'developerswork444@gmail.com';
         const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
           headers: {
@@ -64,7 +65,7 @@ export class EmailService {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            sender: { name: 'Grand View Hotel & Suites', email: process.env.GMAIL_USER || 'developerswork444@gmail.com' },
+            sender: { name: 'Grand View Hotel & Suites', email: brevoSenderEmail },
             to: [{ email: mailOptions.to }],
             subject: mailOptions.subject,
             htmlContent: mailOptions.html
@@ -78,26 +79,6 @@ export class EmailService {
         return { messageId: brevoData?.messageId };
       } catch (brevoErr: any) {
         console.warn(`[EMAIL DISPATCH] Brevo HTTPS API failed: ${brevoErr.message}`);
-      }
-    }
-
-    if (process.env.EMAIL_HTTP_WEBHOOK_URL) {
-      try {
-        console.log(`[EMAIL DISPATCH] Dispatching via HTTPS Webhook to ${mailOptions.to}...`);
-        const hookRes = await fetch(process.env.EMAIL_HTTP_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: mailOptions.to,
-            subject: mailOptions.subject,
-            html: mailOptions.html
-          })
-        });
-        const hookData: any = await hookRes.json().catch(() => ({}));
-        console.log(`[EMAIL DISPATCH] Delivered via HTTPS Webhook.`, hookData);
-        return { messageId: 'webhook-' + Date.now() };
-      } catch (hookErr: any) {
-        console.warn(`[EMAIL DISPATCH] HTTPS Webhook failed: ${hookErr.message}`);
       }
     }
 
