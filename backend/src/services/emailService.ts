@@ -26,6 +26,61 @@ export class EmailService {
     const gmailUser = process.env.GMAIL_USER || 'developerswork444@gmail.com';
     const gmailPass = (process.env.GMAIL_PASS || 'rdgizmzxfdbgxalh').replace(/\s+/g, '');
 
+    // 0. HTTP Email APIs (Crucial for platforms like Render Free tier that block outbound SMTP ports 25, 465, 587)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        console.log(`[EMAIL DISPATCH] Dispatching via Resend HTTPS API to ${mailOptions.to}...`);
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.RESEND_FROM || 'Grand View Hotel <onboarding@resend.dev>',
+            to: [mailOptions.to],
+            subject: mailOptions.subject,
+            html: mailOptions.html
+          })
+        });
+        const resData: any = await resendRes.json();
+        if (!resendRes.ok) {
+          throw new Error(resData?.message || `Resend HTTP error ${resendRes.status}`);
+        }
+        console.log(`[EMAIL DISPATCH] Delivered via Resend HTTPS API. ID: ${resData?.id}`);
+        return { messageId: resData?.id };
+      } catch (resendErr: any) {
+        console.warn(`[EMAIL DISPATCH] Resend HTTPS API failed: ${resendErr.message}`);
+      }
+    }
+
+    if (process.env.BREVO_API_KEY) {
+      try {
+        console.log(`[EMAIL DISPATCH] Dispatching via Brevo HTTPS API to ${mailOptions.to}...`);
+        const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: {
+            'api-key': process.env.BREVO_API_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            sender: { name: 'Grand View Hotel & Suites', email: process.env.GMAIL_USER || 'developerswork444@gmail.com' },
+            to: [{ email: mailOptions.to }],
+            subject: mailOptions.subject,
+            htmlContent: mailOptions.html
+          })
+        });
+        const brevoData: any = await brevoRes.json();
+        if (!brevoRes.ok) {
+          throw new Error(brevoData?.message || `Brevo HTTP error ${brevoRes.status}`);
+        }
+        console.log(`[EMAIL DISPATCH] Delivered via Brevo HTTPS API. ID: ${brevoData?.messageId}`);
+        return { messageId: brevoData?.messageId };
+      } catch (brevoErr: any) {
+        console.warn(`[EMAIL DISPATCH] Brevo HTTPS API failed: ${brevoErr.message}`);
+      }
+    }
+
     // 1. If explicit generic SMTP host is configured
     if (process.env.SMTP_HOST && process.env.SMTP_USER) {
       const smtpTransport = nodemailer.createTransport({
