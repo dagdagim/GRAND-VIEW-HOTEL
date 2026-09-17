@@ -1,9 +1,14 @@
 import axios from 'axios';
 
+const rawApiUrl = import.meta.env.VITE_API_URL;
+const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-hotel-backend'))
+  ? rawApiUrl
+  : (import.meta.env.PROD ? 'https://grand-view-hotel-backend.onrender.com/api' : '/api');
+
 // Dedicated Axios client for In-Room Guest Portal
 // Fully isolated from PMS staff auth tokens and PMS session storage
 const guestClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://grand-view-hotel-backend.onrender.com/api' : '/api'),
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json'
   }
