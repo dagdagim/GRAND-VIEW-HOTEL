@@ -26,6 +26,29 @@ export class EmailService {
     const gmailUser = (process.env.GMAIL_USER || 'developerswork444@gmail.com').trim();
     const gmailPass = (process.env.GMAIL_PASS || 'rdgizmzxfdbgxalh').replace(/\s+/g, '');
 
+    // 0. Google Apps Script Webhook (Sends authentic 100% Google-signed emails from developerswork444@gmail.com over HTTPS Port 443)
+    if (process.env.GMAIL_WEBHOOK_URL) {
+      try {
+        console.log(`[EMAIL DISPATCH] Dispatching via Google Apps Script Webhook to ${mailOptions.to}...`);
+        const gRes = await fetch(process.env.GMAIL_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: mailOptions.to,
+            subject: mailOptions.subject,
+            html: mailOptions.html
+          })
+        });
+        const gData: any = await gRes.json();
+        if (gData && gData.success) {
+          console.log(`[EMAIL DISPATCH] Successfully delivered via Google Apps Script Webhook to ${mailOptions.to}`);
+          return { messageId: gData.messageId || 'gmail-webhook-sent' };
+        }
+      } catch (gErr: any) {
+        console.warn(`[EMAIL DISPATCH] Google Apps Script webhook error: ${gErr.message}`);
+      }
+    }
+
     // 1. Primary: Direct Gmail SMTP with guaranteed IPv4 resolution (port 587 & 465)
     if (gmailUser && gmailPass) {
       let targetHost = 'smtp.gmail.com';
@@ -39,7 +62,7 @@ export class EmailService {
         console.warn(`[EMAIL DISPATCH] dns.resolve4 failed: ${dnsErr.message}, defaulting to hostname`);
       }
 
-      // Try Port 587 (STARTTLS) with explicit IPv4
+      // Try Port 587 (STARTTLS) with explicit IPv4 (Fast 3s timeout for cloud hosts)
       try {
         console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 (${targetHost}) for ${mailOptions.to}...`);
         const t587 = nodemailer.createTransport({
@@ -51,9 +74,9 @@ export class EmailService {
             user: gmailUser,
             pass: gmailPass
           },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 12000,
+          connectionTimeout: 2500,
+          greetingTimeout: 2500,
+          socketTimeout: 5000,
           tls: {
             servername: 'smtp.gmail.com',
             rejectUnauthorized: false
@@ -77,9 +100,9 @@ export class EmailService {
             user: gmailUser,
             pass: gmailPass
           },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 12000,
+          connectionTimeout: 2500,
+          greetingTimeout: 2500,
+          socketTimeout: 5000,
           tls: {
             servername: 'smtp.gmail.com',
             rejectUnauthorized: false
