@@ -62,11 +62,26 @@ export const initializeChapaPayment = async (req: Request, res: Response) => {
       }
     });
 
-    // Record pending Payment in database
+    // Record pending Payment in database with guaranteed valid Folio
     if (resItem) {
+      let targetFolio = folioId
+        ? await Folio.findById(folioId)
+        : await Folio.findOne({ reservation: resItem._id });
+
+      if (!targetFolio) {
+        targetFolio = await Folio.create({
+          folioNumber: `FOL-${resItem.bookingNumber}`,
+          reservation: resItem._id,
+          guest: resItem.guest?._id || resItem.guest,
+          grandTotal: payAmount,
+          balance: payAmount,
+          status: 'OPEN'
+        });
+      }
+
       await Payment.create({
         transactionId: txRef,
-        folio: folioId || resItem.folio,
+        folio: targetFolio._id,
         reservation: resItem._id,
         guest: resItem.guest?._id || resItem.guest,
         amount: payAmount,
