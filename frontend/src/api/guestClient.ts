@@ -3,7 +3,7 @@ import axios from 'axios';
 // Dedicated Axios client for In-Room Guest Portal
 // Fully isolated from PMS staff auth tokens and PMS session storage
 const guestClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://grand-view-hotel-backend.onrender.com/api' : '/api'),
   headers: {
     'Content-Type': 'application/json'
   }

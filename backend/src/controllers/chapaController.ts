@@ -16,8 +16,8 @@ export const initializeChapaPayment = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Valid payment amount is required.' });
     }
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+    const clientUrl = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel.onrender.com' : 'http://localhost:5173');
+    const serverUrl = process.env.SERVER_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel-backend.onrender.com' : `http://localhost:${process.env.PORT || 5000}`);
 
     const txRef = `tx-gvh-${resItem ? resItem.bookingNumber.toLowerCase() : Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 

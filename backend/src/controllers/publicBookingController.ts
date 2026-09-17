@@ -250,8 +250,8 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
     let txRef: string | undefined;
 
     if (paymentMethod === 'CHAPA') {
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      const serverUrl = process.env.SERVER_URL || `http://localhost:${process.env.PORT || 5000}`;
+      const clientUrl = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel.onrender.com' : 'http://localhost:5173');
+      const serverUrl = process.env.SERVER_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel-backend.onrender.com' : `http://localhost:${process.env.PORT || 5000}`);
       txRef = `tx-gvh-${bookingNumber.toLowerCase()}-${Date.now()}`;
 
       const payment = await PaymentService.initializePayment({
