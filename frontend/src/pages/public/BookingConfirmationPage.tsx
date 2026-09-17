@@ -34,7 +34,23 @@ export const BookingConfirmationPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAndVerify = async () => {
-    // If returning from Chapa checkout, verify transaction
+    // 1. Fetch booking immediately so the voucher renders without waiting for slow Chapa API
+    try {
+      if (bookingNumber) {
+        const res = await api.get(`/public/booking/${bookingNumber}`);
+        const currentRes = res.data.reservation;
+        setBooking(currentRes);
+        if (currentRes?.paymentStatus === 'PAID') {
+          setChapaVerified(true);
+        }
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Unable to retrieve reservation details.');
+    } finally {
+      setLoading(false);
+    }
+
+    // 2. If returning from Chapa checkout, verify transaction in the background
     const refToVerify = chapaTxRef;
     if (refToVerify) {
       setVerifyingChapa(true);
@@ -42,35 +58,15 @@ export const BookingConfirmationPage: React.FC = () => {
         const verifyRes = await api.get(`/public/chapa/verify/${refToVerify}`);
         if (verifyRes.data?.verified) {
           setChapaVerified(true);
+          if (verifyRes.data?.reservation) {
+            setBooking(verifyRes.data.reservation);
+          }
         }
       } catch (e) {
         console.warn('Chapa verification warning:', e);
       } finally {
         setVerifyingChapa(false);
       }
-    }
-
-    try {
-      if (bookingNumber) {
-        const res = await api.get(`/public/booking/${bookingNumber}`);
-        setBooking(res.data.reservation);
-
-        // If booking is pending and has a reference, check if it's already verified
-        if (res.data.reservation?.paymentMethod === 'CHAPA' && res.data.reservation?.paymentStatus === 'PENDING' && res.data.reservation?.paymentGatewayReference && !refToVerify) {
-          try {
-            const backgroundVerify = await api.get(`/public/chapa/verify/${res.data.reservation.paymentGatewayReference}`);
-            if (backgroundVerify.data?.verified) {
-              setChapaVerified(true);
-              const refreshed = await api.get(`/public/booking/${bookingNumber}`);
-              setBooking(refreshed.data.reservation);
-            }
-          } catch (_) {}
-        }
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Unable to retrieve reservation details.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -133,8 +129,10 @@ export const BookingConfirmationPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6 text-stone-500">
-        Retrieving official booking voucher...
+      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-stone-600">
+        <div className="w-10 h-10 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="font-serif text-lg font-bold text-stone-800">Retrieving official booking voucher...</p>
+        <p className="text-xs text-stone-400 mt-1">Confirming your reservation details with Grand View Hotel</p>
       </div>
     );
   }
