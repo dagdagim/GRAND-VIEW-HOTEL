@@ -416,20 +416,13 @@ export const BookingConfirmationPage: React.FC = () => {
         </div>
 
         {/* Navigation Actions (Hidden when printing) */}
-        <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-4 pt-4">
+        <div className="no-print flex items-center justify-center pt-4">
           <Link
             to="/"
-            className="inline-flex items-center space-x-2 text-stone-600 hover:text-stone-900 text-xs font-bold uppercase tracking-wider"
+            className="inline-flex items-center space-x-2 text-stone-600 hover:text-stone-900 text-xs font-bold uppercase tracking-wider transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Return to Hotel Website</span>
-          </Link>
-
-          <Link
-            to="/pms/reservations"
-            className="inline-flex items-center space-x-2 bg-stone-900 hover:bg-stone-800 text-gold-light border border-gold/40 px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm transition-all"
-          >
-            <span>View Inside PMS Reservations →</span>
           </Link>
         </div>
       </div>

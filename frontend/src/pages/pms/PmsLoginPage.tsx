@@ -7,8 +7,8 @@ export const PmsLoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  const [email, setEmail] = useState<string>('receptionist@grandviewhotel.com');
-  const [password, setPassword] = useState<string>('ReceptionPass123!');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,11 +25,6 @@ export const PmsLoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDemoAccount = (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
   };
 
   return (
@@ -105,51 +100,7 @@ export const PmsLoginPage: React.FC = () => {
             </button>
           </form>
 
-          {/* Quick 1-Click Role Logins */}
-          <div className="mt-8 pt-6 border-t border-slate-200">
-            <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">
-              Quick 1-Click Role Switcher
-            </span>
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <button
-                type="button"
-                onClick={() => handleDemoAccount('receptionist@grandviewhotel.com', 'ReceptionPass123!')}
-                className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
-              >
-                <div className="font-bold text-slate-800">Receptionist</div>
-                <div className="text-[10px] text-slate-400">Front Desk & Check-in</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoAccount('manager@grandviewhotel.com', 'ManagerPass123!')}
-                className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
-              >
-                <div className="font-bold text-slate-800">Hotel Manager</div>
-                <div className="text-[10px] text-slate-400">Full Operational Control</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoAccount('restaurant@grandviewhotel.com', 'RestaurantPass123!')}
-                className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
-              >
-                <div className="font-bold text-slate-800">Restaurant Staff</div>
-                <div className="text-[10px] text-slate-400">POS & Room Charge</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoAccount('housekeeping@grandviewhotel.com', 'HousekeepingPass123!')}
-                className="text-left p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors"
-              >
-                <div className="font-bold text-slate-800">Housekeeper</div>
-                <div className="text-[10px] text-slate-400">Cleaning & Room Ready</div>
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-6 text-center">
+          <div className="mt-8 pt-6 border-t border-slate-200 text-center">
             <Link
               to="/"
               className="text-xs text-slate-500 hover:text-slate-800 font-medium inline-flex items-center space-x-1"
