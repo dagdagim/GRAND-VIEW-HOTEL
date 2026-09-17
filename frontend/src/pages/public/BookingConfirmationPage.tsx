@@ -52,10 +52,12 @@ export const BookingConfirmationPage: React.FC = () => {
     if (refToVerify) {
       setVerifyingChapa(true);
       try {
-        const verifyRes = await api.get(`/public/chapa/verify/${refToVerify}`);
+        const verifyRes = await api.get(`/public/chapa/verify/${refToVerify}`, { timeout: 8000 });
         if (verifyRes.data?.verified) {
           setChapaVerified(true);
-          if (bookingNumber) {
+          if (verifyRes.data?.reservation) {
+            setBooking(verifyRes.data.reservation);
+          } else if (bookingNumber) {
             const refreshed = await api.get(`/public/booking/${bookingNumber}`);
             setBooking(refreshed.data.reservation);
           }

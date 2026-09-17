@@ -173,15 +173,23 @@ export class ChapaService {
       ]
     });
 
-    // Find Reservation by paymentGatewayReference or by parsing txRef
+    // Extract booking number using regex to handle multiple prefixes (e.g. tx-gvh-gvh-93132-...)
+    const bookingMatch = txRef.match(/gvh-\d+/i);
+    const extractedBookingNumber = bookingMatch ? bookingMatch[0].toUpperCase() : null;
+
+    // Find Reservation by payment, metadata, reference, or booking number
     let reservation: any = null;
     if (payment?.reservation) {
       reservation = await Reservation.findById(payment.reservation).populate('roomType guest assignedRoom');
-    } else {
+    } else if (chapaData?.meta?.reservationId) {
+      reservation = await Reservation.findById(chapaData.meta.reservationId).populate('roomType guest assignedRoom');
+    }
+
+    if (!reservation) {
       reservation = await Reservation.findOne({
         $or: [
           { paymentGatewayReference: txRef },
-          { bookingNumber: txRef.replace(/^tx-gvh-/, '').split('-')[0].toUpperCase() }
+          ...(extractedBookingNumber ? [{ bookingNumber: extractedBookingNumber }] : [])
         ]
       }).populate('roomType guest assignedRoom');
     }
@@ -221,13 +229,12 @@ export class ChapaService {
       reservation.status = 'CONFIRMED';
       await reservation.save();
 
-      // Send confirmation email
-      try {
-        if (reservation.guest && reservation.roomType) {
-          await EmailService.sendBookingConfirmation(reservation, reservation.guest, reservation.roomType);
-        }
-      } catch (mailErr) {
-        console.warn('Failed to send Chapa booking confirmation email:', mailErr);
+      // Send confirmation email asynchronously without blocking HTTP response
+      if (reservation.guest && reservation.roomType) {
+        setImmediate(() => {
+          EmailService.sendBookingConfirmation(reservation, reservation.guest, reservation.roomType)
+            .catch(mailErr => console.warn('Failed to send Chapa booking confirmation email:', mailErr));
+        });
       }
 
       // Generate PMS Notification

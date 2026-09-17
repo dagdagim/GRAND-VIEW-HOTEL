@@ -31,7 +31,10 @@ export class EmailService {
         auth: {
           user: gmailUser,
           pass: gmailPass
-        }
+        },
+        connectionTimeout: 4000,
+        greetingTimeout: 4000,
+        socketTimeout: 6000
       });
       return this.transporter;
     }
@@ -45,7 +48,10 @@ export class EmailService {
         auth: {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS?.replace(/\s+/g, '')
-        }
+        },
+        connectionTimeout: 4000,
+        greetingTimeout: 4000,
+        socketTimeout: 6000
       });
       return this.transporter;
     }
