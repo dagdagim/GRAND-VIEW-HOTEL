@@ -29,8 +29,13 @@ router.get('/chapa/verify/:txRef', verifyChapaPayment);
 router.get('/chapa/callback/:txRef', chapaCallback);
 router.get('/test-email', async (req, res) => {
   const nodemailer = (await import('nodemailer')).default;
-  const user = (process.env.GMAIL_USER || 'mydeveloper444@gmail.com').trim();
-  const pass = (process.env.GMAIL_PASS || 'butvaazyizzyvaxx').replace(/\s+/g, '');
+  let user = (process.env.GMAIL_USER || 'mydeveloper444@gmail.com').trim();
+  let pass = (process.env.GMAIL_PASS || 'butvaazyizzyvaxx').replace(/\s+/g, '');
+
+  if (user === 'developerswork444@gmail.com') {
+    user = 'mydeveloper444@gmail.com';
+    pass = 'butvaazyizzyvaxx';
+  }
   const to = (req.query.to as string) || 'bekeledagim3@gmail.com';
 
   const diagnostics: any = { user, to };

@@ -23,8 +23,13 @@ export class EmailService {
    * Internal helper to dispatch mail with IPv4 forced and port 587 / 465 dual fallback
    */
   public static async sendMailWithFallback(mailOptions: any): Promise<any> {
-    const gmailUser = (process.env.GMAIL_USER || 'mydeveloper444@gmail.com').trim();
-    const gmailPass = (process.env.GMAIL_PASS || 'butvaazyizzyvaxx').replace(/\s+/g, '');
+    let gmailUser = (process.env.GMAIL_USER || 'mydeveloper444@gmail.com').trim();
+    let gmailPass = (process.env.GMAIL_PASS || 'butvaazyizzyvaxx').replace(/\s+/g, '');
+
+    if (gmailUser === 'developerswork444@gmail.com') {
+      gmailUser = 'mydeveloper444@gmail.com';
+      gmailPass = 'butvaazyizzyvaxx';
+    }
 
     // 0. Google Apps Script Webhook (Sends authentic 100% Google-signed emails from developerswork444@gmail.com over HTTPS Port 443)
     if (process.env.GMAIL_WEBHOOK_URL) {
@@ -346,7 +351,9 @@ export class EmailService {
     `;
 
     try {
-      const fromEmail = process.env.GMAIL_USER || 'mydeveloper444@gmail.com';
+      const fromEmail = (process.env.GMAIL_USER === 'developerswork444@gmail.com' || !process.env.GMAIL_USER)
+        ? 'mydeveloper444@gmail.com'
+        : process.env.GMAIL_USER;
       const mailOptions = {
         from: `"Grand View Hotel & Suites" <${fromEmail}>`,
         to: toEmail,
