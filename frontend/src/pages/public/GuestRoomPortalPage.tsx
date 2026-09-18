@@ -36,9 +36,66 @@ import {
   Sun,
   Bed,
   Layers,
-  Sparkle
+  Sparkle,
+  Search
 } from 'lucide-react';
 import guestClient from '../../api/guestClient';
+
+// Curated 5-Star Luxury Food & Beverage Visual Catalog
+const DISH_IMAGE_MAP: Record<string, string> = {
+  'Special Doro Wat Deluxe': 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?auto=format&fit=crop&w=800&q=80',
+  'Shekla Special Tibs': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+  'Beyaynetu Royale (Vegan Platter)': 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=800&q=80',
+  'Special Shiro Tegabino': 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?auto=format&fit=crop&w=800&q=80',
+  'Kitfo Special Gourmet': 'https://images.unsplash.com/photo-1514944298352-f6735c026d36?auto=format&fit=crop&w=800&q=80',
+  'Pan-Seared Nile Perch': 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=80',
+  'Fettuccine Truffle Alfredo': 'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?auto=format&fit=crop&w=800&q=80',
+  'Grand View Club Sandwich': 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?auto=format&fit=crop&w=800&q=80',
+  'Crispy Calamari & Tiger Prawns': 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?auto=format&fit=crop&w=800&q=80',
+  'Charcoal Grilled Ribeye (300g)': 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=800&q=80',
+  'Herb-Crusted Lamb Rack': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+  'Traditional Ethiopian Coffee Ceremony': 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=800&q=80',
+  'Warm Chocolate Lava Cake': 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=80',
+  'Tiramisu Della Casa': 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=800&q=80',
+  'Rift Valley Cabernet Sauvignon (Bottle)': 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&w=800&q=80',
+  'Acacia Sunset Cocktail': 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=800&q=80',
+  'Fresh Mango & Avocado Sprizz': 'https://images.unsplash.com/photo-1553530666-ba11a7da3888?auto=format&fit=crop&w=800&q=80',
+};
+
+const CATEGORY_IMAGE_FALLBACKS: Record<string, string> = {
+  'Traditional Ethiopian': 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?auto=format&fit=crop&w=800&q=80',
+  'International Mains': 'https://images.unsplash.com/photo-1645112411341-6c4fd023714a?auto=format&fit=crop&w=800&q=80',
+  'Prime Steaks & Grills': 'https://images.unsplash.com/photo-1558030006-450675393462?auto=format&fit=crop&w=800&q=80',
+  'Specialty Coffee & Desserts': 'https://images.unsplash.com/photo-1606313564200-e75d5e30476c?auto=format&fit=crop&w=800&q=80',
+  'Wines & Signature Cocktails': 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=800&q=80',
+};
+
+const DEFAULT_DISH_IMAGE = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80';
+
+const getDishImage = (dishName: string, categoryName?: string) => {
+  if (dishName && DISH_IMAGE_MAP[dishName]) return DISH_IMAGE_MAP[dishName];
+  if (dishName) {
+    for (const [key, url] of Object.entries(DISH_IMAGE_MAP)) {
+      if (dishName.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(dishName.toLowerCase())) {
+        return url;
+      }
+    }
+  }
+  if (categoryName && CATEGORY_IMAGE_FALLBACKS[categoryName]) {
+    return CATEGORY_IMAGE_FALLBACKS[categoryName];
+  }
+  return DEFAULT_DISH_IMAGE;
+};
+
+const getCategoryIcon = (catName: string) => {
+  const c = catName.toLowerCase();
+  if (c.includes('ethiopian')) return '🥘';
+  if (c.includes('international') || c.includes('mains')) return '🍝';
+  if (c.includes('steak') || c.includes('grill')) return '🥩';
+  if (c.includes('coffee') || c.includes('dessert')) return '☕';
+  if (c.includes('wine') || c.includes('cocktail') || c.includes('beverage')) return '🍷';
+  return '🍽️';
+};
 
 interface CartItem {
   menuItemId: string;
@@ -77,6 +134,7 @@ export const GuestRoomPortalPage: React.FC = () => {
   // Dining / Menu state
   const [menuCategories, setMenuCategories] = useState<Record<string, any[]>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchDishQuery, setSearchDishQuery] = useState<string>('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [orderNotes, setOrderNotes] = useState('');
@@ -499,9 +557,19 @@ export const GuestRoomPortalPage: React.FC = () => {
   };
 
   const allMenuItems = Object.values(menuCategories).flat();
-  const displayedItems = selectedCategory === 'ALL' 
+  const rawDisplayedItems = selectedCategory === 'ALL' 
     ? allMenuItems 
     : (menuCategories[selectedCategory] || []);
+
+  const displayedItems = rawDisplayedItems.filter((item: any) => {
+    if (!searchDishQuery.trim()) return true;
+    const q = searchDishQuery.toLowerCase();
+    return (
+      item.name?.toLowerCase().includes(q) ||
+      item.description?.toLowerCase().includes(q) ||
+      item.dietaryTags?.some((t: string) => t.toLowerCase().includes(q))
+    );
+  });
 
   // =========================================================================
   // VIEW 0: CHECK-OUT COMPLETED & GUEST PORTAL ACCESS DEACTIVATED SCREEN
@@ -754,23 +822,23 @@ export const GuestRoomPortalPage: React.FC = () => {
     <div className="min-h-screen bg-[#F9F9F8] text-slate-900 flex flex-col font-sans">
       
       {/* Refined Luxury Top Header */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 py-3 shadow-xs">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200 px-4 py-3.5 shadow-xs">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-100/70 border border-amber-300 text-amber-900 flex items-center justify-center font-serif font-bold text-base shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-100 to-amber-200 border border-amber-300 text-amber-950 flex items-center justify-center font-serif font-bold text-base shadow-xs">
               GV
             </div>
             <div>
               <div className="flex items-center space-x-2">
-                <span className="font-serif font-bold text-slate-900 text-sm sm:text-base tracking-wide">
+                <span className="font-serif font-bold text-slate-900 text-base sm:text-lg tracking-wide">
                   Grand View Hotel
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 text-amber-200 px-2.5 py-0.5 rounded-full font-mono">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-900 text-amber-300 px-2.5 py-0.5 rounded-full font-mono shadow-xs">
                   Room {room?.roomNumber || initialRoom}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500">
-                {guest?.name ? `Guest: ${guest.name}` : (room?.roomType || 'Standard Double Room')}
+              <p className="text-xs text-slate-500 font-medium">
+                {guest?.name ? `Guest: ${guest.name}` : (room?.roomType || 'Deluxe Luxury Room')}
               </p>
             </div>
           </div>
@@ -778,7 +846,7 @@ export const GuestRoomPortalPage: React.FC = () => {
           <div className="flex items-center space-x-2">
             <button
               onClick={handleLogout}
-              className="inline-flex items-center space-x-1 text-xs text-slate-500 hover:text-rose-600 px-3 py-1.5 rounded-xl border border-stone-200 hover:border-rose-200 hover:bg-rose-50/50 transition-all"
+              className="inline-flex items-center space-x-1.5 text-xs text-slate-600 hover:text-rose-600 px-3 py-1.5 rounded-xl border border-stone-200 hover:border-rose-200 hover:bg-rose-50 transition-all font-medium"
               title="Sign out of guest portal"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -789,135 +857,178 @@ export const GuestRoomPortalPage: React.FC = () => {
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-5 pb-28 space-y-5">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-5 pb-28 space-y-5">
         
         {/* Quick Room Banner & Wi-Fi & DND & Day Finished Card */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Wi-Fi Card */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/50 flex items-center justify-center">
-                <Wifi className="w-4 h-4" />
+          <div className="bg-white border border-stone-200/90 rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:border-amber-400/50 transition-all">
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 flex items-center justify-center shrink-0">
+                  <Wifi className="w-4 h-4" />
+                </div>
+                <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>5 GHz Fast</span>
+                </span>
               </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block">High-Speed Wi-Fi</span>
-                <span className="text-xs font-bold text-slate-900">{hotelInfo?.wifiSsid || 'GrandView_Guest_5G'}</span>
-              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">High-Speed Wi-Fi</span>
+              <span className="text-sm font-bold text-slate-900 font-mono block truncate mt-0.5" title={hotelInfo?.wifiSsid || 'GrandView_Guest_5G'}>
+                {hotelInfo?.wifiSsid || 'GrandView_Guest_5G'}
+              </span>
             </div>
-            <div className="flex items-center space-x-1.5">
+
+            <div className="mt-3.5 pt-3 border-t border-stone-100 grid grid-cols-2 gap-2">
               <button
                 onClick={() => setWifiModalOpen(true)}
-                className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300/80 transition-all text-[11px] font-bold flex items-center space-x-1 shadow-2xs"
+                className="px-2 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-[11px] font-bold flex items-center justify-center space-x-1 transition-all active:scale-95 shadow-2xs"
                 title="Scan Wi-Fi QR Code with phone camera"
               >
-                <QrCode className="w-3.5 h-3.5 text-amber-800" />
+                <QrCode className="w-3.5 h-3.5 text-amber-800 shrink-0" />
                 <span>QR Code</span>
               </button>
               <button
                 onClick={copyWifiPassword}
-                className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 transition-all text-[11px] font-semibold flex items-center space-x-1"
+                className="px-2 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-slate-700 text-[11px] font-semibold flex items-center justify-center space-x-1 transition-all active:scale-95"
                 title="Copy Wi-Fi Password"
               >
-                {copiedWifi ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedWifi ? <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" /> : <Copy className="w-3.5 h-3.5 shrink-0" />}
                 <span>{copiedWifi ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
           </div>
 
           {/* DND Toggle Card */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-            <div className="flex items-center space-x-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stay?.doNotDisturb ? 'bg-rose-50 text-rose-600 border border-rose-200' : 'bg-stone-100 text-stone-600'}`}>
-                {stay?.doNotDisturb ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block">Privacy (DND)</span>
-                <span className={`text-xs font-bold ${stay?.doNotDisturb ? 'text-rose-700' : 'text-slate-800'}`}>
-                  {stay?.doNotDisturb ? 'Do Not Disturb Active' : 'Service Welcome'}
+          <div className={`border rounded-2xl p-4 flex flex-col justify-between shadow-xs transition-all ${
+            stay?.doNotDisturb 
+              ? 'bg-rose-50/40 border-rose-200' 
+              : 'bg-white border-stone-200/90 hover:border-stone-300'
+          }`}>
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                  stay?.doNotDisturb ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-stone-100 text-stone-600'
+                }`}>
+                  {stay?.doNotDisturb ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  stay?.doNotDisturb 
+                    ? 'bg-rose-100 text-rose-800 border-rose-200' 
+                    : 'bg-emerald-50 text-emerald-800 border-emerald-200/60'
+                }`}>
+                  {stay?.doNotDisturb ? 'DND ON' : 'WELCOME'}
                 </span>
               </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Privacy (DND)</span>
+              <span className={`text-sm font-bold block truncate mt-0.5 ${stay?.doNotDisturb ? 'text-rose-700' : 'text-slate-900'}`}>
+                {stay?.doNotDisturb ? 'Do Not Disturb' : 'Service Welcome'}
+              </span>
             </div>
-            <button
-              onClick={toggleDnd}
-              disabled={togglingDnd}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all shadow-xs ${
-                stay?.doNotDisturb 
-                  ? 'bg-rose-600 hover:bg-rose-700 text-white' 
-                  : 'bg-stone-100 hover:bg-stone-200 text-slate-700'
-              }`}
-            >
-              {togglingDnd ? '...' : (stay?.doNotDisturb ? 'Turn Off' : 'Set DND')}
-            </button>
+
+            <div className="mt-3.5 pt-3 border-t border-stone-100">
+              <button
+                onClick={toggleDnd}
+                disabled={togglingDnd}
+                className={`w-full py-1.5 px-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 active:scale-95 shadow-2xs ${
+                  stay?.doNotDisturb
+                    ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                    : 'bg-stone-100 hover:bg-stone-200 text-slate-800'
+                }`}
+              >
+                {stay?.doNotDisturb ? <Bell className="w-3.5 h-3.5 shrink-0" /> : <BellOff className="w-3.5 h-3.5 text-stone-500 shrink-0" />}
+                <span>{togglingDnd ? 'Updating...' : (stay?.doNotDisturb ? 'Turn Off DND' : 'Set Do Not Disturb')}</span>
+              </button>
+            </div>
           </div>
 
           {/* Day Finished / Sleep Mode Card */}
-          <div className={`border rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all ${
+          <div className={`border rounded-2xl p-4 flex flex-col justify-between shadow-xs transition-all ${
             stay?.dayFinished 
               ? 'bg-indigo-950/5 border-indigo-300 ring-1 ring-indigo-200' 
-              : 'bg-white border-stone-200'
+              : 'bg-white border-stone-200/90 hover:border-indigo-300'
           }`}>
-            <div className="flex items-center space-x-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                stay?.dayFinished 
-                  ? 'bg-indigo-100 text-indigo-800 border border-indigo-300' 
-                  : 'bg-slate-100 text-slate-700'
-              }`}>
-                <Moon className="w-4 h-4" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block">Night Status</span>
-                <span className={`text-xs font-bold ${stay?.dayFinished ? 'text-indigo-950' : 'text-slate-800'}`}>
-                  {stay?.dayFinished ? 'Day Concluded' : 'Day Active'}
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                  stay?.dayFinished 
+                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' 
+                    : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
+                }`}>
+                  <Moon className="w-4 h-4" />
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  stay?.dayFinished 
+                    ? 'bg-indigo-100 text-indigo-800 border-indigo-200' 
+                    : 'bg-amber-50 text-amber-800 border-amber-200/60'
+                }`}>
+                  {stay?.dayFinished ? '🌙 NIGHT' : '☀️ DAY'}
                 </span>
               </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Night Status</span>
+              <span className={`text-sm font-bold block truncate mt-0.5 ${stay?.dayFinished ? 'text-indigo-950' : 'text-slate-900'}`}>
+                {stay?.dayFinished ? 'Day Concluded' : 'Day Active'}
+              </span>
             </div>
-            {stay?.dayFinished ? (
-              <div className="flex items-center space-x-1">
+
+            <div className="mt-3.5 pt-3 border-t border-stone-100">
+              {stay?.dayFinished ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setDayFinishedModalOpen(true)}
+                    className="px-2 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-bold transition-all text-center active:scale-95 shadow-2xs"
+                    title="View or Edit Night Settings"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={handleReopenDay}
+                    disabled={resumingDay}
+                    className="px-2 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-bold transition-all flex items-center justify-center space-x-1 active:scale-95 shadow-2xs"
+                    title="Resume Daylight Mode"
+                  >
+                    <Sun className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>{resumingDay ? '...' : 'Resume'}</span>
+                  </button>
+                </div>
+              ) : (
                 <button
                   onClick={() => setDayFinishedModalOpen(true)}
-                  className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-[11px] font-bold transition-all shadow-2xs"
-                  title="View or Edit Night Settings"
+                  className="w-full py-1.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-200 text-[11px] font-bold uppercase tracking-wider transition-all shadow-xs flex items-center justify-center space-x-1.5 active:scale-95"
                 >
-                  Edit
+                  <Moon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Finish Day</span>
                 </button>
-                <button
-                  onClick={handleReopenDay}
-                  disabled={resumingDay}
-                  className="px-2.5 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-[11px] font-bold transition-all shadow-2xs flex items-center space-x-1"
-                  title="Resume Daylight Mode"
-                >
-                  <Sun className="w-3 h-3 text-amber-700" />
-                  <span>{resumingDay ? '...' : 'Resume'}</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setDayFinishedModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-200 text-xs font-bold uppercase tracking-wider transition-all shadow-xs flex items-center space-x-1.5"
-              >
-                <Moon className="w-3.5 h-3.5 text-amber-400" />
-                <span>Finish Day</span>
-              </button>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Reception Call */}
-          <div className="bg-white border border-stone-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center justify-center">
-                <Phone className="w-4 h-4" />
+          <div className="bg-white border border-stone-200/90 rounded-2xl p-4 flex flex-col justify-between shadow-xs hover:border-blue-300 transition-all">
+            <div>
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center justify-center shrink-0">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 px-2 py-0.5 rounded-full">
+                  24/7 Desk
+                </span>
               </div>
-              <div>
-                <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider block">Front Desk</span>
-                <span className="text-xs font-bold text-slate-900">Ext. 0 / +251 11 661 8000</span>
-              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Front Desk</span>
+              <span className="text-sm font-bold text-slate-900 block truncate mt-0.5">
+                Ext. 0 • Reception
+              </span>
             </div>
-            <a
-              href="tel:+251116618000"
-              className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold transition-all"
-            >
-              Call
-            </a>
+
+            <div className="mt-3.5 pt-3 border-t border-stone-100">
+              <a
+                href="tel:+251116618000"
+                className="w-full py-1.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[11px] font-bold transition-all flex items-center justify-center space-x-1.5 active:scale-95 shadow-2xs"
+              >
+                <Phone className="w-3.5 h-3.5 shrink-0" />
+                <span>Call Desk (+251 11 661 8000)</span>
+              </a>
+            </div>
           </div>
         </div>
 
@@ -1027,49 +1138,49 @@ export const GuestRoomPortalPage: React.FC = () => {
         <div className="flex items-center bg-white p-1.5 rounded-2xl border border-stone-200 shadow-xs overflow-x-auto space-x-1.5 scrollbar-none">
           <button
             onClick={() => setActiveTab('dining')}
-            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
               activeTab === 'dining'
-                ? 'bg-slate-900 text-amber-200 shadow-md shadow-slate-900/10'
+                ? 'bg-slate-900 text-amber-300 shadow-md shadow-slate-900/10'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-stone-50'
             }`}
           >
-            <Utensils className="w-3.5 h-3.5" />
+            <Utensils className="w-4 h-4 text-amber-400" />
             <span>Room Dining</span>
           </button>
           
           <button
             onClick={() => setActiveTab('expenses')}
-            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
               activeTab === 'expenses'
-                ? 'bg-slate-900 text-amber-200 shadow-md shadow-slate-900/10'
+                ? 'bg-slate-900 text-amber-300 shadow-md shadow-slate-900/10'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-stone-50'
             }`}
           >
-            <Receipt className="w-3.5 h-3.5" />
+            <Receipt className="w-4 h-4 text-amber-400" />
             <span>Room Bill</span>
           </button>
 
           <button
             onClick={() => setActiveTab('services')}
-            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
               activeTab === 'services'
-                ? 'bg-slate-900 text-amber-200 shadow-md shadow-slate-900/10'
+                ? 'bg-slate-900 text-amber-300 shadow-md shadow-slate-900/10'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-stone-50'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Sparkles className="w-4 h-4 text-amber-400" />
             <span>Guest Services</span>
           </button>
 
           <button
             onClick={() => setActiveTab('tracker')}
-            className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center space-x-2 ${
               activeTab === 'tracker'
-                ? 'bg-slate-900 text-amber-200 shadow-md shadow-slate-900/10'
+                ? 'bg-slate-900 text-amber-300 shadow-md shadow-slate-900/10'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-stone-50'
             }`}
           >
-            <Clock className="w-3.5 h-3.5" />
+            <Clock className="w-4 h-4 text-amber-400" />
             <span>Order Tracker</span>
           </button>
         </div>
@@ -1079,92 +1190,166 @@ export const GuestRoomPortalPage: React.FC = () => {
         {/* ================================================================= */}
         {activeTab === 'dining' && (
           <div className="space-y-4">
-            {/* Category Filter Chips */}
-            <div className="flex items-center space-x-2 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                onClick={() => setSelectedCategory('ALL')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap shadow-2xs ${
-                  selectedCategory === 'ALL'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white border border-stone-200 text-slate-600 hover:bg-stone-50'
-                }`}
-              >
-                All Dishes ({allMenuItems.length})
-              </button>
-              {Object.keys(menuCategories).map(catName => (
+            {/* Search & Category Filter Header */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchDishQuery}
+                  onChange={(e) => setSearchDishQuery(e.target.value)}
+                  placeholder="Search in-room culinary dishes, steaks, cocktails, desserts..."
+                  className="w-full bg-white border border-stone-200 rounded-2xl pl-10 pr-9 py-2.5 text-xs text-slate-900 placeholder-stone-400 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 shadow-xs transition-all"
+                />
+                {searchDishQuery && (
+                  <button
+                    onClick={() => setSearchDishQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Category Filter Chips Bar */}
+            <div className="relative">
+              <div className="flex items-center space-x-2 overflow-x-auto pb-1.5 scrollbar-none">
                 <button
-                  key={catName}
-                  onClick={() => setSelectedCategory(catName)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold tracking-wider uppercase transition-all whitespace-nowrap shadow-2xs ${
-                    selectedCategory === catName
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white border border-stone-200 text-slate-600 hover:bg-stone-50'
+                  onClick={() => setSelectedCategory('ALL')}
+                  className={`inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold tracking-wide transition-all whitespace-nowrap shadow-xs shrink-0 ${
+                    selectedCategory === 'ALL'
+                      ? 'bg-slate-900 text-amber-300 ring-1 ring-slate-900 shadow-md'
+                      : 'bg-white border border-stone-200 text-slate-700 hover:border-amber-400 hover:bg-stone-50'
                   }`}
                 >
-                  {catName}
+                  <span>✨</span>
+                  <span>All Dishes</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    selectedCategory === 'ALL' ? 'bg-amber-400/20 text-amber-200' : 'bg-stone-100 text-slate-600'
+                  }`}>
+                    {allMenuItems.length}
+                  </span>
                 </button>
-              ))}
+
+                {Object.keys(menuCategories).map(catName => (
+                  <button
+                    key={catName}
+                    onClick={() => setSelectedCategory(catName)}
+                    className={`inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold tracking-wide transition-all whitespace-nowrap shadow-xs shrink-0 ${
+                      selectedCategory === catName
+                        ? 'bg-slate-900 text-amber-300 ring-1 ring-slate-900 shadow-md'
+                        : 'bg-white border border-stone-200 text-slate-700 hover:border-amber-400 hover:bg-stone-50'
+                    }`}
+                  >
+                    <span>{getCategoryIcon(catName)}</span>
+                    <span>{catName}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                      selectedCategory === catName ? 'bg-amber-400/20 text-amber-200' : 'bg-stone-100 text-slate-600'
+                    }`}>
+                      {menuCategories[catName]?.length || 0}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Menu Items Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {displayedItems.map((item: any) => {
                 const cartEntry = cart.find(c => c.menuItemId === item._id);
                 return (
                   <div 
                     key={item._id}
-                    className="bg-white border border-stone-200 hover:border-amber-500/50 rounded-2xl p-4 transition-all flex flex-col justify-between shadow-xs hover:shadow-md"
+                    className="group bg-white border border-stone-200/90 hover:border-amber-400/80 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between shadow-xs hover:shadow-lg hover:-translate-y-0.5"
                   >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-serif font-bold text-slate-900 text-base">{item.name}</h3>
-                        <span className="font-mono text-sm font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg shrink-0">
-                          ETB {item.price?.toLocaleString()}
+                    {/* Dish Image Banner */}
+                    <div className="relative h-44 sm:h-48 w-full overflow-hidden bg-stone-100">
+                      <img 
+                        src={getDishImage(item.name, item.category?.name)} 
+                        alt={item.name}
+                        loading="lazy"
+                        onError={(e: any) => { 
+                          if (e.currentTarget.src !== DEFAULT_DISH_IMAGE) {
+                            e.currentTarget.src = DEFAULT_DISH_IMAGE;
+                          }
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                      
+                      {/* Dietary Badges */}
+                      <div className="absolute top-2.5 left-2.5 flex flex-wrap gap-1 max-w-[70%]">
+                        {item.dietaryTags && item.dietaryTags.map((tag: string) => (
+                          <span 
+                            key={tag} 
+                            className="text-[10px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full bg-white/95 backdrop-blur-md text-slate-800 shadow-xs border border-white/40"
+                          >
+                            {tag === 'Vegan' ? '🌱 Vegan' : tag === 'Halal' ? 'حلال Halal' : tag === 'Vegetarian' ? '🥗 Vegetarian' : tag === 'Gluten-Free' ? '🌾 Gluten-Free' : tag}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* Floating Price Tag */}
+                      <div className="absolute bottom-2.5 right-2.5 bg-slate-900/95 backdrop-blur-md border border-amber-400/40 text-amber-200 px-3 py-1 rounded-xl shadow-md flex items-center space-x-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400/80">ETB</span>
+                        <span className="font-mono text-sm font-black text-amber-200">
+                          {item.price?.toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-600 mt-1.5 leading-relaxed line-clamp-2">{item.description}</p>
-                      
-                      {item.dietaryTags && item.dietaryTags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2.5">
-                          {item.dietaryTags.map((tag: string) => (
-                            <span key={tag} className="text-[10px] font-semibold bg-stone-100 text-slate-600 px-2 py-0.5 rounded-md">
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+
+                      {/* Prep Time Tag */}
+                      <div className="absolute bottom-2.5 left-2.5 text-white text-[11px] font-medium flex items-center space-x-1 drop-shadow-md">
+                        <Clock className="w-3.5 h-3.5 text-amber-300" />
+                        <span>{item.preparationTimeMinutes || 15} mins prep</span>
+                      </div>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400 font-medium">
-                        ⏱️ ~{item.preparationTimeMinutes || 20} mins prep
-                      </span>
+                    {/* Dish Info & Action Body */}
+                    <div className="p-4 flex-1 flex flex-col justify-between">
+                      <div>
+                        <h3 className="font-serif font-bold text-slate-900 text-base leading-snug group-hover:text-amber-900 transition-colors">
+                          {item.name}
+                        </h3>
+                        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed line-clamp-2">
+                          {item.description}
+                        </p>
+                      </div>
 
-                      {cartEntry ? (
-                        <div className="flex items-center space-x-2 bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-amber-900">
-                          <button 
-                            onClick={() => updateCartQty(item._id, -1)}
-                            className="p-1 hover:bg-amber-100 rounded-lg transition-colors"
-                          >
-                            <Minus className="w-3.5 h-3.5" />
-                          </button>
-                          <span className="font-mono font-bold text-xs px-1">{cartEntry.quantity}</span>
-                          <button 
-                            onClick={() => updateCartQty(item._id, 1)}
-                            className="p-1 hover:bg-amber-100 rounded-lg transition-colors"
+                      {/* Cart Action Row */}
+                      <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          In-room delivery
+                        </span>
+
+                        {cartEntry ? (
+                          <div className="flex items-center space-x-2 bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 text-amber-900 shadow-2xs">
+                            <button 
+                              onClick={() => updateCartQty(item._id, -1)}
+                              className="p-1 hover:bg-amber-100 rounded-lg transition-colors"
+                              title="Decrease quantity"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="font-mono font-bold text-xs px-1 min-w-[16px] text-center">{cartEntry.quantity}</span>
+                            <button 
+                              onClick={() => updateCartQty(item._id, 1)}
+                              className="p-1 hover:bg-amber-100 rounded-lg transition-colors"
+                              title="Increase quantity"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-amber-500 text-amber-200 hover:text-slate-950 font-bold text-xs uppercase tracking-wider transition-all duration-200 shadow-xs active:scale-95"
                           >
                             <Plus className="w-3.5 h-3.5" />
+                            <span>Add to Order</span>
                           </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => addToCart(item)}
-                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-200 font-bold text-xs uppercase tracking-wider transition-all shadow-xs"
-                        >
-                          <Plus className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Add to Order</span>
-                        </button>
-                      )}
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1173,7 +1358,9 @@ export const GuestRoomPortalPage: React.FC = () => {
 
             {displayedItems.length === 0 && (
               <div className="py-16 text-center text-slate-500 text-xs bg-white rounded-2xl border border-stone-200">
-                No items found in this section.
+                {searchDishQuery 
+                  ? `No dishes found matching "${searchDishQuery}". Try another search term.`
+                  : 'No items found in this section.'}
               </div>
             )}
           </div>
@@ -1678,7 +1865,7 @@ export const GuestRoomPortalPage: React.FC = () => {
       {/* Floating Bottom Cart Bar */}
       {cart.length > 0 && activeTab === 'dining' && (
         <div className="fixed bottom-0 inset-x-0 z-40 bg-white/95 border-t border-stone-200 p-4 backdrop-blur-md shadow-lg">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="max-w-5xl mx-auto flex items-center justify-between">
             <div>
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -1724,9 +1911,17 @@ export const GuestRoomPortalPage: React.FC = () => {
             <div className="py-4 overflow-y-auto space-y-3 flex-1">
               {cart.map(item => (
                 <div key={item.menuItemId} className="flex items-center justify-between p-3.5 rounded-xl bg-stone-50 border border-stone-200">
-                  <div>
-                    <span className="font-bold text-slate-900 text-xs block">{item.name}</span>
-                    <span className="text-[11px] text-amber-900 font-mono font-medium">ETB {item.price} each</span>
+                  <div className="flex items-center space-x-3">
+                    <img 
+                      src={getDishImage(item.name)} 
+                      alt={item.name} 
+                      className="w-12 h-12 rounded-xl object-cover border border-stone-200 shrink-0" 
+                      onError={(e: any) => { e.currentTarget.src = DEFAULT_DISH_IMAGE; }}
+                    />
+                    <div>
+                      <span className="font-bold text-slate-900 text-xs block">{item.name}</span>
+                      <span className="text-[11px] text-amber-900 font-mono font-medium">ETB {item.price.toLocaleString()} each</span>
+                    </div>
                   </div>
 
                   <div className="flex items-center space-x-2 bg-white border border-stone-200 rounded-xl px-2 py-1 text-slate-800">
