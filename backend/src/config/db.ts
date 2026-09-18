@@ -7,6 +7,10 @@ const PRIMARY_URI = process.env.MONGODB_URI || 'mongodb://admin:password123@127.
 const LOCAL_FALLBACK_URI = 'mongodb://admin:password123@127.0.0.1:27017/hotel_pms?authSource=admin';
 
 export async function connectDB(): Promise<void> {
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
   const isCloudUri = process.env.MONGODB_URI && process.env.MONGODB_URI.startsWith('mongodb+srv://');
 
   try {

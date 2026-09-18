@@ -301,9 +301,9 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
         if (emailResult.success) {
           console.log(`[CHECK-IN PASSCODE EMAIL] Successfully delivered to ${guestEmail} for Room ${room.roomNumber}`);
         } else {
-          console.error(`[CHECK-IN PASSCODE EMAIL ERROR] Failed to deliver: ${emailResult.message}`);
+          console.warn(`[CHECK-IN PASSCODE EMAIL] ${emailResult.message}`);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('[CHECK-IN PASSCODE EMAIL ERROR] Failed to dispatch email:', err);
       }
     }
