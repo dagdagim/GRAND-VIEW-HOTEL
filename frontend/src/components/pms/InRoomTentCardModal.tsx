@@ -98,8 +98,14 @@ export const InRoomTentCardModal: React.FC<InRoomTentCardModalProps> = ({
     try {
       setSendingEmail(true);
       setEmailDetails(null);
+      const publicOrigin = 'https://grand-view-hotel.onrender.com';
+      const effectiveClientUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+        ? publicOrigin
+        : window.location.origin;
+
       const res = await api.post(`/pms/frontdesk/room/${roomNumber}/send-passcode-email`, {
-        customEmail: guestEmailInput.trim()
+        customEmail: guestEmailInput.trim(),
+        clientUrl: effectiveClientUrl
       });
       setEmailDetails({
         message: res.data.message || `Passcode emailed to ${guestEmailInput.trim()}!`,
@@ -122,7 +128,10 @@ export const InRoomTentCardModal: React.FC<InRoomTentCardModalProps> = ({
   if (!isOpen) return null;
 
   const origin = window.location.origin;
-  const qrUrl = `${origin}/room/${roomNumber}`;
+  // If running locally, route printed tent-card QR codes to the public cloud domain so guest phones can scan & access it
+  const publicCloudOrigin = 'https://grand-view-hotel.onrender.com';
+  const effectiveOrigin = (origin.includes('localhost') || origin.includes('127.0.0.1')) ? publicCloudOrigin : origin;
+  const qrUrl = `${effectiveOrigin}/room/${roomNumber}`;
   const passcode = data?.activeStay?.guestAccessCode || '------';
   const isOccupied = data?.isOccupied;
 

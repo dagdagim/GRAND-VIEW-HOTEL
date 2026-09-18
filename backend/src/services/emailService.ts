@@ -16,11 +16,30 @@ export interface InRoomPasscodeEmailParams {
   wifiSsid?: string;
   wifiPassword?: string;
   hotelPhone?: string;
+  clientUrl?: string;
+}
+
+let cachedIpv4Host: string | null = null;
+let cachedTransporter: any = null;
+
+async function getGmailIpv4Host(): Promise<string> {
+  if (cachedIpv4Host) return cachedIpv4Host;
+  try {
+    const ips = await dns.promises.resolve4('smtp.gmail.com');
+    if (ips && ips.length > 0) {
+      cachedIpv4Host = ips[0];
+      console.log(`[EMAIL DISPATCH] Resolved and cached smtp.gmail.com to IPv4: ${cachedIpv4Host}`);
+      return cachedIpv4Host;
+    }
+  } catch (err: any) {
+    console.warn(`[EMAIL DISPATCH] IPv4 lookup for smtp.gmail.com failed: ${err.message}`);
+  }
+  return 'smtp.gmail.com';
 }
 
 export class EmailService {
   /**
-   * Internal helper to dispatch mail with IPv4 forced and port 587 / 465 dual fallback
+   * Internal helper to dispatch mail with IPv4 forced, pool reuse, and fast port 587/465 fallback
    */
   public static async sendMailWithFallback(mailOptions: any): Promise<any> {
     let gmailUser = (process.env.GMAIL_USER || 'mydeveloper444@gmail.com').trim();
@@ -54,23 +73,60 @@ export class EmailService {
       }
     }
 
-    // 1. Primary: Direct Gmail SMTP with Port 465 (SSL) & Port 587 fallback
+    // 1. Primary: Direct Gmail SMTP with guaranteed IPv4 resolution & connection pooling
     if (gmailUser && gmailPass) {
-      // Try Port 465 (SSL Direct) first - most reliable on cloud / Vercel platforms
+      const ipv4Host = await getGmailIpv4Host();
+
+      // Priority 1: Port 587 (STARTTLS) with explicit IPv4 & connection pooling
       try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP Port 465 (SSL) for ${mailOptions.to}...`);
+        if (!cachedTransporter) {
+          console.log(`[EMAIL DISPATCH] Initializing pooled Gmail SMTP Port 587 via IPv4 (${ipv4Host})...`);
+          cachedTransporter = nodemailer.createTransport({
+            host: ipv4Host,
+            port: 587,
+            secure: false,
+            requireTLS: true,
+            pool: true,
+            maxConnections: 3,
+            maxMessages: 100,
+            auth: {
+              user: gmailUser,
+              pass: gmailPass
+            },
+            connectionTimeout: 4000,
+            greetingTimeout: 4000,
+            socketTimeout: 6000,
+            tls: {
+              servername: 'smtp.gmail.com',
+              rejectUnauthorized: false
+            }
+          } as any);
+        }
+
+        const info = await cachedTransporter.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 587 (IPv4: ${ipv4Host}). MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err587: any) {
+        console.warn(`[EMAIL DISPATCH] Gmail Port 587 failed (${err587.message}). Trying Port 465 (SSL)...`);
+        cachedTransporter = null;
+      }
+
+      // Priority 2: Port 465 (SSL Direct) with explicit IPv4
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP Port 465 (SSL IPv4: ${ipv4Host}) for ${mailOptions.to}...`);
         const t465 = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
+          host: ipv4Host,
           port: 465,
           secure: true,
           auth: {
             user: gmailUser,
             pass: gmailPass
           },
-          connectionTimeout: 12000,
-          greetingTimeout: 12000,
-          socketTimeout: 15000,
+          connectionTimeout: 4000,
+          greetingTimeout: 4000,
+          socketTimeout: 6000,
           tls: {
+            servername: 'smtp.gmail.com',
             rejectUnauthorized: false
           }
         } as any);
@@ -78,33 +134,7 @@ export class EmailService {
         console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 465. MessageId: ${info?.messageId}`);
         return info;
       } catch (err465: any) {
-        console.warn(`[EMAIL DISPATCH] Gmail Port 465 failed (${err465.message}). Retrying via Port 587 (STARTTLS)...`);
-      }
-
-      // Try Port 587 (STARTTLS)
-      try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP Port 587 for ${mailOptions.to}...`);
-        const t587 = nodemailer.createTransport({
-          host: 'smtp.gmail.com',
-          port: 587,
-          secure: false,
-          requireTLS: true,
-          auth: {
-            user: gmailUser,
-            pass: gmailPass
-          },
-          connectionTimeout: 12000,
-          greetingTimeout: 12000,
-          socketTimeout: 15000,
-          tls: {
-            rejectUnauthorized: false
-          }
-        } as any);
-        const info = await t587.sendMail(mailOptions);
-        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 587. MessageId: ${info?.messageId}`);
-        return info;
-      } catch (err587: any) {
-        console.warn(`[EMAIL DISPATCH] Gmail Port 587 attempt failed: ${err587.message}.`);
+        console.warn(`[EMAIL DISPATCH] Gmail Port 465 failed: ${err465.message}. Falling back to next provider...`);
       }
     }
 
@@ -263,8 +293,16 @@ export class EmailService {
       ? new Date(checkOutDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
       : 'Your Departure Date';
 
-    const clientUrl = process.env.CLIENT_URL || (process.env.NODE_ENV === 'production' ? 'https://grand-view-hotel.onrender.com' : 'http://localhost:5173');
-    const portalUrl = `${clientUrl}/room/${roomNumber}`;
+    // For emails delivered to guests, NEVER use localhost.
+    // Always use the official live hotel domain: https://grand-view-hotel.onrender.com
+    const publicProductionUrl = 'https://grand-view-hotel.onrender.com';
+    let baseClientUrl = params.clientUrl || process.env.CLIENT_URL || publicProductionUrl;
+    if (!baseClientUrl || baseClientUrl.includes('localhost') || baseClientUrl.includes('127.0.0.1')) {
+      baseClientUrl = publicProductionUrl;
+    }
+
+    // Direct 1-click link with query passcode
+    const portalUrl = `${baseClientUrl}/room/${roomNumber}?code=${passcode}`;
 
     const htmlBody = `
 <!DOCTYPE html>
@@ -284,7 +322,7 @@ export class EmailService {
     .passcode-label { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #c29b38; margin-bottom: 8px; }
     .passcode-digits { font-family: 'Courier New', monospace; font-size: 38px; font-weight: 900; letter-spacing: 10px; color: #ffffff; margin: 8px 0; text-shadow: 0 0 15px rgba(194, 155, 56, 0.5); }
     .passcode-sub { font-size: 11px; color: #94a3b8; }
-    .btn-container { text-align: center; margin: 32px 0; }
+    .btn-container { text-align: center; margin: 32px 0 16px; }
     .portal-btn { background: linear-gradient(135deg, #c29b38 0%, #dfb752 100%); color: #020617; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; text-decoration: none; padding: 16px 36px; border-radius: 14px; display: inline-block; box-shadow: 0 10px 25px -5px rgba(194, 155, 56, 0.4); }
     .features-list { background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); padding: 18px 22px; margin-bottom: 24px; }
     .feature-item { font-size: 13px; color: #cbd5e1; margin: 8px 0; }
@@ -313,7 +351,16 @@ export class EmailService {
       </div>
 
       <div class="btn-container">
-        <a href="${portalUrl}" class="portal-btn" target="_blank">Open In-Room Guest Portal</a>
+        <a href="${portalUrl}" class="portal-btn" target="_blank">Access In-Room Guest Portal</a>
+      </div>
+      <p style="text-align: center; margin: 0 0 18px; font-size: 12px; color: #94a3b8;">
+        ✨ 1-Click Access: Passcode <strong>${passcode}</strong> is pre-applied for instant login.
+      </p>
+      <div style="background: rgba(194,155,56,0.08); border: 1px solid rgba(194,155,56,0.25); border-radius: 12px; padding: 10px 16px; margin-bottom: 24px; text-align: center;">
+        <span style="font-size: 11px; color: #94a3b8;">Direct Web Portal Link:</span><br>
+        <a href="${portalUrl}" style="color: #dfb752; font-size: 12px; font-weight: bold; text-decoration: underline; word-break: break-all;" target="_blank">
+          ${portalUrl}
+        </a>
       </div>
 
       <div class="features-list">
@@ -370,16 +417,15 @@ export class EmailService {
         console.log(`[EMAIL PREVIEW URL] ${previewUrl}`);
       }
 
-      try {
-        await AuditLog.create({
-          userName: 'System Emailer',
-          action: 'SEND_IN_ROOM_PASSCODE_EMAIL',
-          resource: 'Guest',
-          details: `Dispatched in-room verification passcode [${passcode}] to ${toEmail} for Room ${roomNumber}`
-        });
-      } catch (logErr: any) {
+      // Record audit log asynchronously without blocking the email dispatch response
+      AuditLog.create({
+        userName: 'System Emailer',
+        action: 'SEND_IN_ROOM_PASSCODE_EMAIL',
+        resource: 'Guest',
+        details: `Dispatched in-room verification passcode [${passcode}] to ${toEmail} for Room ${roomNumber}`
+      }).catch((logErr: any) => {
         console.warn('[EMAIL AUDIT LOG ERROR] Failed to record audit log:', logErr?.message);
-      }
+      });
 
       return {
         success: true,

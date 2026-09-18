@@ -27,7 +27,8 @@ guestClient.interceptors.request.use((config) => {
 guestClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+    const isLoginEndpoint = error.config?.url?.includes('/guest-portal/login');
+    if (!isLoginEndpoint && error.response && (error.response.status === 401 || error.response.status === 403)) {
       localStorage.removeItem('guest_portal_token');
       window.dispatchEvent(
         new CustomEvent('guest_checkout_detected', {

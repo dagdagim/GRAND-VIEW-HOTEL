@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { 
@@ -34,7 +34,9 @@ import {
   QrCode,
   Moon,
   Sun,
-  Bed
+  Bed,
+  Layers,
+  Sparkle
 } from 'lucide-react';
 import guestClient from '../../api/guestClient';
 
@@ -52,13 +54,15 @@ export const GuestRoomPortalPage: React.FC = () => {
   const navigate = useNavigate();
 
   const initialRoom = paramRoom || searchParams.get('room') || '103';
+  const queryCode = (searchParams.get('code') || searchParams.get('passcode') || '').trim();
 
   // Auth state
   const [roomNumberInput, setRoomNumberInput] = useState(initialRoom);
-  const [passcodeInput, setPasscodeInput] = useState('');
+  const [passcodeInput, setPasscodeInput] = useState(queryCode);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('guest_portal_token'));
+  const autoLoginAttemptedRef = useRef(false);
 
   // Checkout Eviction state
   const [isCheckoutEvicted, setIsCheckoutEvicted] = useState<boolean>(false);
@@ -134,6 +138,15 @@ export const GuestRoomPortalPage: React.FC = () => {
     }
   }, [initialRoom]);
 
+  // Auto-login seamlessly if code/passcode query parameter is present in URL (e.g. from email link)
+  useEffect(() => {
+    if (queryCode && queryCode.length >= 4 && !autoLoginAttemptedRef.current) {
+      autoLoginAttemptedRef.current = true;
+      setPasscodeInput(queryCode);
+      handleLogin(undefined, queryCode);
+    }
+  }, [queryCode, initialRoom]);
+
   // Evict guest immediately when check-out is finished
   const handleCheckoutEviction = (message?: string) => {
     localStorage.removeItem('guest_portal_token');
@@ -190,7 +203,7 @@ export const GuestRoomPortalPage: React.FC = () => {
   const handleLogin = async (e?: React.FormEvent, directPasscode?: string) => {
     if (e) e.preventDefault();
     const code = directPasscode || passcodeInput.trim();
-    const room = roomNumberInput.trim();
+    const room = roomNumberInput.trim() || initialRoom;
 
     if (!room || !code) {
       setAuthError('Please provide both your physical room number and 6-digit passcode.');

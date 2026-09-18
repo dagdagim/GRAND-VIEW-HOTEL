@@ -296,7 +296,8 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
           checkOutDate: reservation.checkOutDate,
           wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
           wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
-          hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
+          hotelPhone: (settings as any)?.phone || '+251 11 661 8000',
+          clientUrl: 'https://grand-view-hotel.onrender.com'
         });
         if (emailResult.success) {
           console.log(`[CHECK-IN PASSCODE EMAIL] Successfully delivered to ${guestEmail} for Room ${room.roomNumber}`);
@@ -315,7 +316,7 @@ export const checkInGuest = async (req: AuthenticatedRequest, res: Response): Pr
       room,
       guestAccessCode,
       emailSentTo,
-      portalUrl: `/room/${room.roomNumber}`
+      portalUrl: `https://grand-view-hotel.onrender.com/room/${room.roomNumber}`
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -599,7 +600,9 @@ export const regenerateRoomPasscode = async (req: AuthenticatedRequest, res: Res
       `Regenerated In-Room Guest Portal passcode for Room ${room.roomNumber}`
     );
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const clientUrl = (process.env.CLIENT_URL && !process.env.CLIENT_URL.includes('localhost'))
+      ? process.env.CLIENT_URL
+      : 'https://grand-view-hotel.onrender.com';
 
     res.json({
       stayId: stay._id,
@@ -740,7 +743,7 @@ export const updateGuestRequestStatus = async (req: AuthenticatedRequest, res: R
 export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { roomNumber } = req.params;
-    const { customEmail } = req.body;
+    const { customEmail, clientUrl: reqClientUrl } = req.body;
 
     const room = await Room.findOne({ roomNumber }).populate('roomType');
     if (!room || !room.currentStay) {
@@ -779,6 +782,13 @@ export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Resp
       return;
     }
 
+    // Determine client URL - always ensure guest portal links route to live production website, never localhost
+    const callerOrigin = reqClientUrl || req.headers.origin || (req.headers.referer ? new URL(req.headers.referer).origin : undefined);
+    let effectiveClientUrl = callerOrigin || process.env.CLIENT_URL || 'https://grand-view-hotel.onrender.com';
+    if (!effectiveClientUrl || effectiveClientUrl.includes('localhost') || effectiveClientUrl.includes('127.0.0.1')) {
+      effectiveClientUrl = 'https://grand-view-hotel.onrender.com';
+    }
+
     const settings = await HotelSettings.findOne();
     const emailResult = await EmailService.sendInRoomPasscodeEmail({
       toEmail: recipientEmail,
@@ -789,7 +799,8 @@ export const sendRoomPasscodeEmail = async (req: AuthenticatedRequest, res: Resp
       checkOutDate: stay.scheduledCheckOut,
       wifiSsid: (settings as any)?.wifiSsid || 'GrandView_Guest_5G',
       wifiPassword: (settings as any)?.wifiPassword || 'WelcomeGrandView2026',
-      hotelPhone: (settings as any)?.phone || '+251 11 661 8000'
+      hotelPhone: (settings as any)?.phone || '+251 11 661 8000',
+      clientUrl: effectiveClientUrl
     });
 
     res.json({
