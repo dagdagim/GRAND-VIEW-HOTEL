@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PRIMARY_URI = process.env.MONGODB_URI || 'mongodb://admin:password123@127.0.0.1:27017/hotel_pms?authSource=admin';
+const PRIMARY_URI = process.env.MONGODB_URI || 'mongodb+srv://dagimbekele_db_user:bAmvDzSfbWhOHE4A@cluster0.wpcchcr.mongodb.net/?appName=Cluster0';
 const LOCAL_FALLBACK_URI = 'mongodb://admin:password123@127.0.0.1:27017/hotel_pms?authSource=admin';
 
 export async function connectDB(): Promise<void> {
