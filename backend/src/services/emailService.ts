@@ -49,62 +49,23 @@ export class EmailService {
       }
     }
 
-    // 1. Primary: Direct Gmail SMTP with guaranteed IPv4 resolution (port 587 & 465)
+    // 1. Primary: Direct Gmail SMTP with Port 465 (SSL) & Port 587 fallback
     if (gmailUser && gmailPass) {
-      let targetHost = 'smtp.gmail.com';
+      // Try Port 465 (SSL Direct) first - most reliable on cloud / Vercel platforms
       try {
-        const ipv4List = await dns.promises.resolve4('smtp.gmail.com');
-        if (ipv4List && ipv4List.length > 0) {
-          targetHost = ipv4List[0];
-          console.log(`[EMAIL DISPATCH] Resolved smtp.gmail.com to IPv4: ${targetHost}`);
-        }
-      } catch (dnsErr: any) {
-        console.warn(`[EMAIL DISPATCH] dns.resolve4 failed: ${dnsErr.message}, defaulting to hostname`);
-      }
-
-      // Try Port 587 (STARTTLS) with explicit IPv4 (Fast 3s timeout for cloud hosts)
-      try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 587 (${targetHost}) for ${mailOptions.to}...`);
-        const t587 = nodemailer.createTransport({
-          host: targetHost,
-          port: 587,
-          secure: false, // STARTTLS
-          requireTLS: true,
-          auth: {
-            user: gmailUser,
-            pass: gmailPass
-          },
-          connectionTimeout: 2500,
-          greetingTimeout: 2500,
-          socketTimeout: 5000,
-          tls: {
-            servername: 'smtp.gmail.com',
-            rejectUnauthorized: false
-          }
-        } as any);
-        const info = await t587.sendMail(mailOptions);
-        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 587. MessageId: ${info?.messageId}`);
-        return info;
-      } catch (err587: any) {
-        console.warn(`[EMAIL DISPATCH] Gmail Port 587 attempt failed: ${err587.message}. Retrying via Port 465...`);
-      }
-
-      // Try Port 465 (SSL) with explicit IPv4
-      try {
-        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP port 465 (${targetHost}) for ${mailOptions.to}...`);
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP Port 465 (SSL) for ${mailOptions.to}...`);
         const t465 = nodemailer.createTransport({
-          host: targetHost,
+          host: 'smtp.gmail.com',
           port: 465,
           secure: true,
           auth: {
             user: gmailUser,
             pass: gmailPass
           },
-          connectionTimeout: 2500,
-          greetingTimeout: 2500,
-          socketTimeout: 5000,
+          connectionTimeout: 12000,
+          greetingTimeout: 12000,
+          socketTimeout: 15000,
           tls: {
-            servername: 'smtp.gmail.com',
             rejectUnauthorized: false
           }
         } as any);
@@ -112,7 +73,33 @@ export class EmailService {
         console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 465. MessageId: ${info?.messageId}`);
         return info;
       } catch (err465: any) {
-        console.warn(`[EMAIL DISPATCH] Gmail Port 465 failed: ${err465.message}. Falling back to HTTPS APIs...`);
+        console.warn(`[EMAIL DISPATCH] Gmail Port 465 failed (${err465.message}). Retrying via Port 587 (STARTTLS)...`);
+      }
+
+      // Try Port 587 (STARTTLS)
+      try {
+        console.log(`[EMAIL DISPATCH] Connecting via Gmail SMTP Port 587 for ${mailOptions.to}...`);
+        const t587 = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          requireTLS: true,
+          auth: {
+            user: gmailUser,
+            pass: gmailPass
+          },
+          connectionTimeout: 12000,
+          greetingTimeout: 12000,
+          socketTimeout: 15000,
+          tls: {
+            rejectUnauthorized: false
+          }
+        } as any);
+        const info = await t587.sendMail(mailOptions);
+        console.log(`[EMAIL DISPATCH] Delivery succeeded via Gmail Port 587. MessageId: ${info?.messageId}`);
+        return info;
+      } catch (err587: any) {
+        console.warn(`[EMAIL DISPATCH] Gmail Port 587 attempt failed: ${err587.message}.`);
       }
     }
 
@@ -369,10 +356,7 @@ export class EmailService {
 
       const info = await this.sendMailWithFallback(mailOptions);
       const previewUrl = nodemailer.getTestMessageUrl(info);
-      const isSandbox = !Boolean(
-        (process.env.GMAIL_USER && process.env.GMAIL_PASS) ||
-        (process.env.SMTP_HOST && process.env.SMTP_USER)
-      );
+      const isSandbox = Boolean(previewUrl);
 
       console.log(`[EMAIL DISPATCH] Sent In-Room Passcode email to ${toEmail} for Room ${roomNumber}. MessageId: ${info?.messageId}`);
       if (previewUrl) {
@@ -395,7 +379,9 @@ export class EmailService {
         previewUrl,
         passcode,
         isSandbox,
-        message: `In-room passcode [${passcode}] successfully sent to ${toEmail}!`
+        message: isSandbox
+          ? `Passcode [${passcode}] generated. Notice: Real inbox delivery was deferred to preview link because Gmail daily sending quota or port timeout occurred. View preview: ${previewUrl}`
+          : `In-room passcode [${passcode}] successfully sent directly to ${toEmail}!`
       };
     } catch (error: any) {
       console.error('[EMAIL ERROR] Failed to send passcode email:', error);

@@ -264,8 +264,8 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
 
       let serverUrl = process.env.SERVER_URL;
       if (!serverUrl || serverUrl.includes('localhost')) {
-        if (process.env.NODE_ENV === 'production') {
-          serverUrl = 'https://grand-view-hotel-backend.onrender.com';
+        if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+          serverUrl = 'https://grand-view-hotel-backend.vercel.app';
         } else {
           serverUrl = serverUrl || `http://localhost:${process.env.PORT || 5000}`;
         }

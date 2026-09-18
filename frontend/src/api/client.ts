@@ -3,7 +3,7 @@ import axios from 'axios';
 const rawApiUrl = import.meta.env.VITE_API_URL;
 const API_BASE_URL = (rawApiUrl && !rawApiUrl.includes('your-hotel-backend'))
   ? rawApiUrl
-  : (import.meta.env.PROD ? 'https://grand-view-hotel-backend.onrender.com/api' : '/api');
+  : (import.meta.env.PROD ? 'https://grand-view-hotel-backend.vercel.app/api' : '/api');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
